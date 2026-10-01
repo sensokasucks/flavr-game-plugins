@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fridge OpenTTD</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: transparent;
+      color: #f3efe4;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      overflow: hidden;
+    }
+    #root {
+      min-width: 420px;
+      max-width: 560px;
+      padding: 12px 14px;
+      background: linear-gradient(160deg, rgba(18, 28, 22, 0.88), rgba(10, 14, 18, 0.92));
+      border: 1px solid rgba(214, 176, 80, 0.28);
+      border-radius: 12px;
+    }
+    .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+      color: #d6b050;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    .date { color: #c8d6c0; letter-spacing: 0; text-transform: none; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; color: #8aa090; font-weight: 600; padding: 2px 6px 6px 0; }
+    td { padding: 3px 8px 3px 0; border-top: 1px solid rgba(255,255,255,0.06); }
+    .id { color: #d6b050; width: 28px; }
+    .cash { font-variant-numeric: tabular-nums; }
+    .up { color: #8fd18f; }
+    .muted { color: #8a9088; font-size: 12px; margin-top: 8px; }
+    .offline { color: #e8a0a0; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="head">
+      <span>OpenTTD · Chat Fund</span>
+      <span id="date" class="date"></span>
+    </div>
+    <table>
+      <thead>
+        <tr><th class="id">#</th><th>Company</th><th>Cash</th><th>Chat £</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="status" class="muted">Connecting…</div>
+  </div>
+  <script>
+    const rows = document.getElementById("rows");
+    const dateEl = document.getElementById("date");
+    const status = document.getElementById("status");
+    function fmt(n) {
+      n = Number(n || 0);
+      if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + "M";
+      if (Math.abs(n) >= 1e3) return Math.round(n / 1e3) + "k";
+      return String(n);
+    }
+    function render(data) {
+      const list = (data && data.companies) || [];
+      dateEl.textContent = (data && data.date) || "";
+      rows.innerHTML = list.map((c) => {
+        return `<tr>
+          <td class="id">${c.id}</td>
+          <td>${escapeHtml(c.name || "—")}</td>
+          <td class="cash">${fmt(c.money)}</td>
+          <td class="cash up">${c.chat_pounds ? fmt(c.chat_pounds) : "—"}</td>
+        </tr>`;
+      }).join("");
+      if (!(data && data.connected)) {
+        status.innerHTML = '<span class="offline">Admin Port offline</span>' +
+          (data && data.error ? " — " + escapeHtml(data.error) : "");
+      } else {
+        const last = ((data.recent) || [])[0];
+        status.textContent = last
+          ? last.username + " → #" + last.company_id + " " + fmt(last.pounds)
+          : "Waiting for !invest";
+      }
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+    }
+    async function poll() {
+      try {
+        const r = await fetch("/api/openttd/state");
+        if (r.ok) render(await r.json());
+      } catch (e) {}
+    }
+    poll();
+    setInterval(poll, 3000);
+  </script>
+</body>
+</html>

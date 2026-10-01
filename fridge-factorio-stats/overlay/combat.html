@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Factorio Combat</title>
+  <link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+  <div class="panel widget">
+    <header class="header">
+      <div class="logo">⚔ COMBAT</div>
+      <div class="status" id="status">…</div>
+    </header>
+    <div class="stat-card combat solo">
+      <div class="combat-row">
+        <div>
+          <div class="stat-mini-label">KILLS</div>
+          <div class="stat-value small" id="kills">0</div>
+        </div>
+        <div>
+          <div class="stat-mini-label">DEATHS</div>
+          <div class="stat-value small death" id="deaths">0</div>
+        </div>
+      </div>
+      <div class="stat-extra" id="evolution">evo 0.00%</div>
+    </div>
+  </div>
+  <script src="widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,297 @@
+/* Factorio-inspired XSplit overlay – transparent background, industrial dark theme */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background: transparent !important;
+  font-family: "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+  color: #e8e0d0;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.panel {
+  width: 420px;
+  max-width: 100%;
+  background: linear-gradient(160deg, rgba(18, 22, 28, 0.92) 0%, rgba(12, 15, 20, 0.94) 100%);
+  border: 2px solid #3a4550;
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px rgba(255, 140, 0, 0.15),
+    0 8px 32px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 14px 16px 10px;
+  backdrop-filter: blur(4px);
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #2a3340;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 2px;
+  color: #ff8c00;
+  text-shadow: 0 0 8px rgba(255, 140, 0, 0.4);
+}
+
+.status {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: #2a3340;
+  color: #8a9aa8;
+}
+.status.live {
+  background: rgba(40, 120, 60, 0.35);
+  color: #6dce7a;
+}
+.status.error {
+  background: rgba(140, 40, 40, 0.4);
+  color: #ff6b6b;
+}
+
+/* Stats grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.stat-card {
+  background: rgba(28, 34, 42, 0.85);
+  border: 1px solid #2e3845;
+  border-radius: 4px;
+  padding: 10px 12px;
+  position: relative;
+}
+
+.stat-card.combat {
+  grid-column: 1 / -1;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #7a8a9a;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f0e6d2;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stat-value.small {
+  font-size: 20px;
+}
+
+.stat-value.death {
+  color: #ff6b6b;
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: #9aa8b5;
+  margin-top: 2px;
+}
+
+.stat-extra {
+  font-size: 11px;
+  color: #6a7a8a;
+  margin-top: 6px;
+}
+
+/* Bars */
+.bar-track {
+  height: 5px;
+  background: #1a222c;
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff8c00, #ffb347);
+  border-radius: 2px;
+  transition: width 0.6s ease;
+  box-shadow: 0 0 6px rgba(255, 140, 0, 0.45);
+}
+
+.bar-fill.research-fill {
+  background: linear-gradient(90deg, #4a9eff, #7ec8ff);
+  box-shadow: 0 0 6px rgba(74, 158, 255, 0.45);
+}
+
+/* Combat row */
+.combat-row {
+  display: flex;
+  gap: 32px;
+  margin-top: 4px;
+}
+
+.stat-mini-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #7a8a9a;
+}
+
+/* Alerts */
+.alerts-section {
+  background: rgba(28, 34, 42, 0.85);
+  border: 1px solid #2e3845;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  max-height: 140px;
+  overflow: hidden;
+}
+
+.alerts-list {
+  margin-top: 6px;
+  max-height: 100px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid #252d38;
+  animation: slideIn 0.35s ease;
+}
+
+.alert-item:last-child {
+  border-bottom: none;
+}
+
+.alert-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  background: #c44;
+  box-shadow: 0 0 6px rgba(200, 60, 60, 0.5);
+}
+
+.alert-icon.yellow {
+  background: #c9a227;
+  box-shadow: 0 0 6px rgba(200, 160, 40, 0.5);
+}
+
+.alert-text {
+  color: #e0d4c0;
+  line-height: 1.3;
+}
+
+.alert-empty {
+  color: #5a6a7a;
+  font-style: italic;
+  padding: 4px 0;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #4a5a6a;
+  letter-spacing: 0.5px;
+}
+
+/* Animations */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.status.connecting {
+  animation: pulse 1.2s infinite;
+}
+
+/* Scrollbar for alerts */
+.alerts-list::-webkit-scrollbar {
+  width: 4px;
+}
+.alerts-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.alerts-list::-webkit-scrollbar-thumb {
+  background: #3a4550;
+  border-radius: 2px;
+}
+
+/* ========== Individual widget modes ========== */
+.panel.widget {
+  width: 280px;
+  padding: 12px 14px 12px;
+}
+
+.panel.widget.compact {
+  width: 200px;
+  padding: 10px 12px;
+}
+
+.panel.widget.alerts-widget {
+  width: 320px;
+  max-height: 260px;
+}
+
+.stat-card.solo {
+  background: transparent;
+  border: none;
+  padding: 4px 0 0;
+}
+
+.stat-card.center {
+  text-align: center;
+}
+
+.stat-value.big {
+  font-size: 36px;
+  letter-spacing: -0.5px;
+  margin-top: 4px;
+}
+
+.alerts-section.solo {
+  background: transparent;
+  border: none;
+  padding: 4px 0 0;
+  margin-bottom: 0;
+  max-height: 200px;
+}
+
+.alerts-section.solo .alerts-list {
+  max-height: 180px;
+  margin-top: 0;
+}

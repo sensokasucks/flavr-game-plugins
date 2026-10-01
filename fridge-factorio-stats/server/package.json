@@ -1,0 +1,16 @@
+{
+  "name": "fridge-factorio-bridge",
+  "version": "1.0.0",
+  "description": "Bridge between Factorio (RCON + Wiretap file) and XSplit overlay via WebSocket",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "rcon-client": "^4.2.5",
+    "chokidar": "^4.0.1",
+    "express": "^4.21.0"
+  }
+}

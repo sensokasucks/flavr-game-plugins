@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "fridge-minecraft-client",
+  "version": "${version}",
+  "name": "Fridge Minecraft Client Stats",
+  "description": "Exposes live player health, deaths, inventory and other stats over a local HTTP API for Fridge Stream Core overlays.",
+  "authors": ["Sensoka Workshop"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.fridge.minecraft.client.FridgeClientMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  }
+}

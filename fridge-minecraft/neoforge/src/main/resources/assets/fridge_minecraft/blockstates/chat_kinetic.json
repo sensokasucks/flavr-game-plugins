@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "axis=y": { "model": "fridge_minecraft:block/chat_kinetic" },
+    "axis=z": { "model": "fridge_minecraft:block/chat_kinetic", "x": 90 },
+    "axis=x": { "model": "fridge_minecraft:block/chat_kinetic", "x": 90, "y": 90 }
+  }
+}

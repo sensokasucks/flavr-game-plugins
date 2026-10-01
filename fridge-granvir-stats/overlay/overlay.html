@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fridge Granvir Stats</title>
+  <link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+  <div class="panel">
+    <header>
+      <div class="logo">GRANVIR</div>
+      <div class="status" id="status">CONNECTING</div>
+    </header>
+    <div class="grid">
+      <div class="row">
+        <div class="label">HEALTH</div>
+        <div class="value"><span id="hp">—</span><span class="sub"> / <span id="hp-max">—</span></span></div>
+        <div class="bar"><div class="fill" id="hp-bar"></div></div>
+      </div>
+      <div class="row">
+        <div class="label">HEAT</div>
+        <div class="value"><span id="heat">—</span><span class="sub"> / <span id="heat-max">—</span></span></div>
+        <div class="bar"><div class="fill heat" id="heat-bar"></div></div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="row"><div class="label">PHASE</div><div id="phase">—</div></div>
+      <div class="row"><div class="label">SQUAD</div><div id="squad">—</div></div>
+      <div class="row"><div class="label">REGION</div><div id="region">—</div></div>
+      <div class="row"><div class="label">CREDITS</div><div id="credits">—</div></div>
+      <div class="row"><div class="label">HOURS</div><div id="hours">—</div></div>
+      <div class="row"><div class="label">THREAT</div><div id="threat">—</div></div>
+    </div>
+    <div class="row"><div class="label">KILLS</div><div id="kills">—</div></div>
+    <div class="note" id="note"></div>
+  </div>
+  <script src="overlay.js"></script>
+</body>
+</html>

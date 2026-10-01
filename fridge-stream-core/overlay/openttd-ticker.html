@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fridge OpenTTD ticker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: transparent; overflow: hidden; }
+    #tape {
+      height: 36px;
+      line-height: 36px;
+      white-space: nowrap;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 15px;
+      color: #f4efe2;
+      background: rgba(8, 12, 10, 0.72);
+      border-top: 1px solid rgba(214, 176, 80, 0.35);
+      overflow: hidden;
+    }
+    #inner {
+      display: inline-block;
+      padding-left: 100%;
+      animation: tick 28s linear infinite;
+    }
+    .item { margin-right: 2.4em; }
+    .sym { color: #d6b050; }
+    @keyframes tick {
+      from { transform: translateX(0); }
+      to { transform: translateX(-100%); }
+    }
+  </style>
+</head>
+<body>
+  <div id="tape"><div id="inner">OpenTTD ticker — enable openttd.enabled</div></div>
+  <script>
+    const inner = document.getElementById("inner");
+    // Company names are set by players in multiplayer — escape them.
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    function fmt(n) {
+      n = Number(n || 0);
+      if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + "M";
+      return Math.round(n).toLocaleString();
+    }
+    async function poll() {
+      try {
+        const r = await fetch("/api/openttd/state");
+        if (!r.ok) return;
+        const data = await r.json();
+        const bits = (data.companies || []).map((c) => {
+          return `<span class="item"><span class="sym">#${esc(c.id)} ${esc((c.name || "").slice(0,18))}</span> £${fmt(c.money)} tick ${esc(c.price || 0)}</span>`;
+        });
+        inner.innerHTML = bits.join("") || "No companies listed";
+      } catch (e) {}
+    }
+    poll();
+    setInterval(poll, 4000);
+  </script>
+</body>
+</html>

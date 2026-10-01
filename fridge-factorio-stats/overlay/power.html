@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Factorio Power</title>
+  <link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+  <div class="panel widget">
+    <header class="header">
+      <div class="logo">⚡ POWER</div>
+      <div class="status" id="status">…</div>
+    </header>
+    <div class="stat-card power solo">
+      <div class="stat-value" id="power-prod">—</div>
+      <div class="stat-sub" id="power-cons">consumption —</div>
+      <div class="bar-track">
+        <div class="bar-fill" id="power-bar" style="width:0%"></div>
+      </div>
+      <div class="stat-extra" id="power-acc">acc —</div>
+    </div>
+  </div>
+  <script src="widget.js"></script>
+</body>
+</html>

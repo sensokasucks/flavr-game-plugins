@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Minecraft market</title>
+  <link rel="stylesheet" href="market.css" />
+</head>
+<body>
+  <div class="tape-wrap" id="wrap">
+    <div class="tape-brand"><b>MC</b> MKT</div>
+    <div class="tape-event" id="event"></div>
+    <div class="tape-track"><div class="tape-inner" id="inner"></div></div>
+  </div>
+  <script src="market.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    if (!params.get("book")) history.replaceState(null, "", "?book=minecraft");
+  </script>
+  <script src="market-tape-boot.js"></script>
+</body>
+</html>

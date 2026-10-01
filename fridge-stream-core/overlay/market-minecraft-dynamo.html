@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Minecraft dynamo</title>
+  <link rel="stylesheet" href="market.css" />
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", sans-serif; color: #f3efe4; background: transparent; }
+    .card { padding: 12px 16px; background: rgba(8,10,14,.55); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; width: 280px; }
+    .k { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; opacity: .6; }
+    .v { font-size: 28px; font-weight: 700; margin: 4px 0 10px; }
+    .row { display: flex; justify-content: space-between; font-size: 13px; opacity: .85; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="k">Chat Dynamo</div>
+    <div class="v" id="lvl">—</div>
+    <div class="row"><span>Stock factor</span><span id="fac">—</span></div>
+    <div class="row"><span>Ticker</span><span id="sym">MINECRAF</span></div>
+    <div class="row"><span>Last dividend</span><span id="div">—</span></div>
+  </div>
+  <script>
+    async function poll() {
+      try {
+        const r = await fetch("/api/admin/market", { cache: "no-store" });
+        /* public fallback */
+      } catch (e) {}
+      try {
+        const s = await fetch("/api/market/state?book=minecraft", { cache: "no-store" }).then((x) => x.json());
+        const it = (s.instruments || [])[0];
+        if (it) {
+          document.getElementById("sym").textContent = it.symbol;
+          document.getElementById("fac").textContent = (it.price / (it.base_price || it.price || 1)).toFixed(2) + "×";
+        }
+        const d = s.last_dividend;
+        if (d) document.getElementById("div").textContent = d.symbol + " " + d.points + "pts";
+      } catch (e) {}
+      try {
+        const m = await fetch("/api/metrics").then((x) => x.json());
+        document.getElementById("lvl").textContent = (m.powerLevel ?? m.power_level ?? "—") + " / 15";
+      } catch (e) {}
+    }
+    poll();
+    setInterval(poll, 2000);
+  </script>
+</body>
+</html>

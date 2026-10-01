@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "fridge-minecraft-server",
+  "version": "${version}",
+  "name": "Fridge Minecraft Server Interactions",
+  "description": "Receives commands from Fridge Stream Core and provides the Chat Dynamo block that outputs redstone based on stream metrics.",
+  "authors": ["Sensoka Workshop"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.fridge.minecraft.server.FridgeServerMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.1"
+  }
+}

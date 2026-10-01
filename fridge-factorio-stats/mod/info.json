@@ -1,0 +1,9 @@
+{
+  "name": "fridge-factorio-stats",
+  "version": "1.2.0",
+  "title": "Fridge Factorio Stats",
+  "author": "Sensoka's Workshop",
+  "factorio_version": "2.0",
+  "dependencies": ["base >= 2.0"],
+  "description": "Factory overlays, Chat Dynamo (stream + PWR-priced power), Power Vault and Item Vault that feed Fridge Market dividends."
+}

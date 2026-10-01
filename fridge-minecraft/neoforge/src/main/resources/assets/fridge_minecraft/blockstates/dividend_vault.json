@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "axis=y": { "model": "fridge_minecraft:block/dividend_vault" },
+    "axis=z": { "model": "fridge_minecraft:block/dividend_vault", "x": 90 },
+    "axis=x": { "model": "fridge_minecraft:block/dividend_vault", "x": 90, "y": 90 }
+  }
+}

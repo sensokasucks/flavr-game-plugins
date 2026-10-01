@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fridge Factorio Stats</title>
+  <link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+  <div id="panel" class="panel">
+    <header class="header">
+      <div class="logo">⚙ FACTORIO</div>
+      <div class="status" id="status">CONNECTING…</div>
+    </header>
+
+    <section class="stats-grid">
+      <!-- Power -->
+      <div class="stat-card power">
+        <div class="stat-label">POWER</div>
+        <div class="stat-value" id="power-prod">—</div>
+        <div class="stat-sub" id="power-cons">consumption —</div>
+        <div class="bar-track">
+          <div class="bar-fill" id="power-bar" style="width:0%"></div>
+        </div>
+        <div class="stat-extra" id="power-acc">acc —</div>
+      </div>
+
+      <!-- Research -->
+      <div class="stat-card research">
+        <div class="stat-label">RESEARCH</div>
+        <div class="stat-value" id="research-name">—</div>
+        <div class="stat-sub" id="research-pct">0%</div>
+        <div class="bar-track">
+          <div class="bar-fill research-fill" id="research-bar" style="width:0%"></div>
+        </div>
+        <div class="stat-extra" id="research-queue">queue: —</div>
+      </div>
+
+      <!-- Combat -->
+      <div class="stat-card combat">
+        <div class="stat-label">COMBAT</div>
+        <div class="combat-row">
+          <div>
+            <div class="stat-mini-label">KILLS</div>
+            <div class="stat-value small" id="kills">0</div>
+          </div>
+          <div>
+            <div class="stat-mini-label">DEATHS</div>
+            <div class="stat-value small death" id="deaths">0</div>
+          </div>
+        </div>
+        <div class="stat-extra" id="evolution">evo 0.00%</div>
+      </div>
+    </section>
+
+    <!-- Alerts feed -->
+    <section class="alerts-section">
+      <div class="stat-label">ALERTS</div>
+      <div id="alerts" class="alerts-list">
+        <div class="alert-empty">No active alerts</div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span id="tick">tick —</span>
+      <span id="source">source —</span>
+    </footer>
+  </div>
+
+  <script src="widget.js"></script>
+</body>
+</html>
