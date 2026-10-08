@@ -219,12 +219,22 @@
     {
       "name": "Minecraft / metrics overlay",
       "file": "overlay.html",
-      "notes": "HP, CPM, power level, inventory flash"
+      "notes": "HP, CPM, power level, inventory flash",
+      "params": [
+        {"key": "show", "label": "Only these modules", "type": "multi", "default": [], "help": "Empty = the config's module list",
+         "options": [["health", "health"], ["food", "food"], ["xp", "xp"], ["deaths", "deaths"], ["armor", "armor"], ["viewers", "viewers"], ["cpm", "cpm"], ["power", "power"], ["effects", "effects"], ["inventory", "inventory"]]},
+        {"key": "hide", "label": "Hide these modules", "type": "multi", "default": [], "help": "",
+         "options": [["health", "health"], ["food", "food"], ["xp", "xp"], ["deaths", "deaths"], ["armor", "armor"], ["viewers", "viewers"], ["cpm", "cpm"], ["power", "power"], ["effects", "effects"], ["inventory", "inventory"]]}
+      ]
     },
     {
       "name": "Minecraft market tape",
       "file": "market-minecraft.html",
-      "notes": "MINECRAF + vault/chest feed"
+      "notes": "MINECRAF + vault/chest feed",
+      "params": [
+        {"key": "symbols", "label": "Tickers", "type": "text", "default": "", "help": "Comma-separated, empty = all", "placeholder": "FRG,FACT"},
+        {"key": "speed", "label": "Scroll speed", "type": "number", "default": 80, "help": "Pixels per second", "min": 10, "max": 400, "step": 10}
+      ]
     },
     {
       "name": "Minecraft dynamo",
