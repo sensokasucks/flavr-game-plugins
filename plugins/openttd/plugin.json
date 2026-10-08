@@ -1,0 +1,103 @@
+{
+  "id": "openttd",
+  "name": "OpenTTD",
+  "version": "1.0.0",
+  "core_api": 1,
+  "kind": "python",
+  "entry": "plugin:OpenTTDIntegration",
+  "description": "Chat funds companies with !invest over the Admin Port (vanilla or JGRPP). Copy gamescript/FridgeChatFund from this plugin's folder into OpenTTD's game folder so investments become in-game cash.",
+  "links": [
+    {
+      "name": "OpenTTD notes",
+      "url": "https://github.com/sensokasucks/flavr-leftovers/tree/main/fridge-stream-core/plugins/openttd/README.md"
+    }
+  ],
+  "config_defaults": {
+    "host": "127.0.0.1",
+    "admin_port": 3977,
+    "admin_password": "",
+    "name": "FridgeStreamCore",
+    "pounds_per_point": 1000,
+    "min_invest_points": 10,
+    "max_invest_points": 5000,
+    "use_gamescript": true,
+    "allow_host_invest": true,
+    "host_company_id": null
+  },
+  "command_group": {
+    "description": "OpenTTD Admin Port + Chat Fund (!invest, !companies)"
+  },
+  "settings": [
+    {
+      "key": "host",
+      "label": "Host",
+      "type": "text",
+      "placeholder": "127.0.0.1"
+    },
+    {
+      "key": "admin_port",
+      "label": "Admin port",
+      "type": "number",
+      "placeholder": "3977"
+    },
+    {
+      "key": "admin_password",
+      "label": "Admin password",
+      "type": "password",
+      "help": "network.admin_password on the server"
+    },
+    {
+      "key": "pounds_per_point",
+      "label": "£ per point",
+      "type": "number",
+      "placeholder": "1000"
+    },
+    {
+      "key": "min_invest_points",
+      "label": "Smallest !invest (points)",
+      "type": "number",
+      "min": 1
+    },
+    {
+      "key": "max_invest_points",
+      "label": "Largest !invest (points)",
+      "type": "number",
+      "min": 1
+    },
+    {
+      "key": "use_gamescript",
+      "label": "FridgeChatFund game script turns investments into cash",
+      "type": "checkbox"
+    },
+    {
+      "key": "allow_host_invest",
+      "label": "Chat may fund the host's company",
+      "type": "checkbox"
+    }
+  ],
+  "market_books": [
+    {
+      "symbol": "HOST",
+      "name": "OpenTTD",
+      "role": "streamer",
+      "price": 15.0
+    }
+  ],
+  "overlays": [
+    {
+      "name": "OpenTTD companies",
+      "file": "openttd.html",
+      "notes": "Date, companies, cash, chat-funded totals"
+    },
+    {
+      "name": "OpenTTD ticker",
+      "file": "openttd-ticker.html",
+      "notes": "Thin tape for the bottom of the stream"
+    },
+    {
+      "name": "OpenTTD market",
+      "file": "market-openttd.html",
+      "notes": "HOST / OpenTTD listing"
+    }
+  ]
+}

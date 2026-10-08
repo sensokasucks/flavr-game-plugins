@@ -1,12 +1,12 @@
 # Checklist — Minecraft
 
-Home: `fridge-minecraft/` (Fabric `client-mod` + `server-mod`, NeoForge `neoforge/`). Core slot: `games/minecraft.py`.
+Home: `fridge-minecraft/` (Fabric `client-mod` + `server-mod`, NeoForge `neoforge/`). Core side: plugin `fridge-stream-core/plugins/minecraft/` (`plugin.py`, `plugin.json`, `commands.json`, `overlay/`). Plugin rules: [plugins.md](plugins.md).
 
 ## Must keep
 
-- [ ] Integration is **opt-in**. `minecraft.enabled` defaults **false** in `config.yaml`, `config.example.yaml`, and `core/config.py` DEFAULTS.
+- [ ] Integration is **opt-in**. `minecraft.enabled` defaults **false** in `config.yaml`, `config.example.yaml`, and the plugin's `plugin.json` `config_defaults` (Core forces `enabled: false` for every plugin default).
 - [ ] Ports: client stats **3852**, server commands / dynamo / market **3853**.
-- [ ] Every mod HTTP handler (except `/api/health`) starts with `rejectUntrusted(ex)`: loopback `Host`, no `Origin`, header `X-Fridge-Core: 1`. Core's `games/minecraft.py` httpx client sends that header. No `Access-Control-Allow-Origin: *`.
+- [ ] Every mod HTTP handler (except `/api/health`) starts with `rejectUntrusted(ex)`: loopback `Host`, no `Origin`, header `X-Fridge-Core: 1`. Core's `plugins/minecraft/plugin.py` httpx client sends that header. No `Access-Control-Allow-Origin: *`.
 - [ ] Folder is mods-only. Chat, permissions, commands, metrics, overlay live in Stream Core. Do not resurrect the old Node bridge.
 - [ ] `jars/` is for pre-built Fabric jars the user adds. Jars are gitignored.
 - [ ] `BUILD.bat` / `build.sh` + `COMPILE.md` remain the build path. README still documents the non-build install path.
@@ -17,7 +17,7 @@ Home: `fridge-minecraft/` (Fabric `client-mod` + `server-mod`, NeoForge `neoforg
 - [ ] Blocks: `fridge_minecraft:chat_dynamo`, `chat_kinetic`, `dividend_vault`, `dividend_chest`. Old `xsplit_*` ids are gone; worlds need blocks replaced after rebrand.
 - [ ] Dividend Chest: 54-slot hopper chest, any item, ItemHandler cap so hoppers / Create funnels can insert.
 - [ ] Command group `minecraft` binds to enabled **and** running.
-- [ ] Admin → Integrations has a Minecraft sub-panel (health, commands Fill/Dry, metrics push, overlay URLs).
+- [ ] Admin → Settings → Game plugins has a Minecraft card and Market a Minecraft sub-page (both from `plugin.json`). Admin → Integrations has a Minecraft sub-panel (health, commands Fill/Dry, metrics push, overlay URLs).
 - [ ] Stats overlay modules still include inventory when the client mod is up (`overlay.show_inventory_seconds`).
 
 ### NeoForge (`fridge-minecraft/neoforge`)

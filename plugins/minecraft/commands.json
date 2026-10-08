@@ -1,0 +1,141 @@
+{
+  "spawn": {
+    "aliases": [
+      "summon"
+    ],
+    "permission": "public",
+    "description": "Spawn an entity near the streamer",
+    "args": [
+      "entity",
+      "qty?"
+    ],
+    "defaultQty": 1,
+    "maxQty": 8,
+    "template": "execute at {player} run summon {arg1} ~ ~1 ~",
+    "qtyTemplate": "execute at {player} run summon {arg1} ~ ~1 ~",
+    "group": "minecraft",
+    "handler": "game",
+    "cost": 0,
+    "examples": [
+      "!spawn creeper",
+      "!spawn zombie 3"
+    ]
+  },
+  "give": {
+    "aliases": [
+      "item"
+    ],
+    "permission": "public",
+    "description": "Give items to the streamer",
+    "args": [
+      "item",
+      "qty?"
+    ],
+    "defaultQty": 1,
+    "maxQty": 64,
+    "template": "give {player} {arg1} {qty}",
+    "group": "minecraft",
+    "handler": "game",
+    "cost": 0
+  },
+  "heal": {
+    "aliases": [
+      "hp"
+    ],
+    "permission": "public",
+    "description": "Fully heal the streamer",
+    "args": [],
+    "template": "effect give {player} minecraft:instant_health 1 10 true",
+    "group": "minecraft",
+    "handler": "game",
+    "cost": 0
+  },
+  "effect": {
+    "aliases": [
+      "potion"
+    ],
+    "permission": "public",
+    "description": "Apply a potion effect",
+    "args": [
+      "effect",
+      "seconds?"
+    ],
+    "defaultSeconds": 30,
+    "maxSeconds": 120,
+    "template": "effect give {player} {arg1} {seconds} 1 true",
+    "group": "minecraft",
+    "handler": "game",
+    "cost": 0,
+    "examples": [
+      "!effect speed 45",
+      "!effect regeneration"
+    ]
+  },
+  "inv": {
+    "aliases": [
+      "inventory"
+    ],
+    "permission": "public",
+    "description": "Show streamer inventory on the overlay for a few seconds",
+    "args": [],
+    "special": "show_inventory",
+    "group": "minecraft",
+    "handler": "game",
+    "cost": 0
+  },
+  "weather": {
+    "permission": "mod",
+    "description": "Change weather",
+    "args": [
+      "type"
+    ],
+    "template": "weather {arg1}",
+    "allowedValues": [
+      "clear",
+      "rain",
+      "thunder"
+    ],
+    "group": "minecraft",
+    "handler": "game",
+    "cost": 0
+  },
+  "time": {
+    "permission": "mod",
+    "description": "Set time of day",
+    "args": [
+      "when"
+    ],
+    "template": "time set {arg1}",
+    "allowedValues": [
+      "day",
+      "night",
+      "noon",
+      "midnight"
+    ],
+    "group": "minecraft",
+    "handler": "game",
+    "cost": 0
+  },
+  "clear": {
+    "permission": "mod",
+    "description": "Clear all effects from streamer",
+    "args": [],
+    "template": "effect clear {player}",
+    "group": "minecraft",
+    "handler": "game",
+    "cost": 0
+  },
+  "tp": {
+    "permission": "admin",
+    "description": "Teleport the streamer",
+    "args": [
+      "x",
+      "y",
+      "z"
+    ],
+    "template": "tp {player} {arg1} {arg2} {arg3}",
+    "group": "minecraft",
+    "handler": "game",
+    "cost": 0
+  }
+}

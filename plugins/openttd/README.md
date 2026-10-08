@@ -13,7 +13,7 @@ Modular game slot: Admin Port + Chat Fund + optional Game Script cash injection.
 | `!ottdsay <text>` | mod | `say` on the server |
 | `!ottdpause` / `!ottdunpause` | mod | Pause the map |
 
-Points come from Core’s existing SQLite ledger. Cash on the map comes from **FridgeChatFund** (`gamescripts/FridgeChatFund`).
+Points come from Core’s existing SQLite ledger. Cash on the map comes from **FridgeChatFund** (`gamescript/FridgeChatFund` in this folder).
 
 Vanilla share buttons are **not** used. JGRPP `allow_shares` should stay off on the stream server so viewers who also play cannot run the 25% loop.
 
@@ -23,7 +23,7 @@ Vanilla share buttons are **not** used. JGRPP `allow_shares` should stay off on 
 2. In `openttd.cfg` / secrets:
    - `admin_password` (required — Admin Port will not listen without it)
    - `server_admin_port = 3977`
-3. Copy `gamescripts/FridgeChatFund` into the OpenTTD `game/` folder and select it as the Game Script.
+3. Copy `gamescript/FridgeChatFund` (in this folder) into the OpenTTD `game/` folder and select it as the Game Script.
 4. Core `config.yaml`:
 
 ```yaml

@@ -1,4 +1,11 @@
-from games.minecraft import MinecraftIntegration, plan_chest_burns, plan_machine_rf
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]       # fridge-stream-core/
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from plugins.minecraft.plugin import MinecraftIntegration, plan_chest_burns, plan_machine_rf
 from core.market import MarketTape
 
 

@@ -1,5 +1,5 @@
 """
-OpenTTD game integration for Fridge Stream Core.
+OpenTTD plugin for Fridge Stream Core.
 
 Talks to a dedicated / listen server over the Admin Port (default TCP 3977).
 Works on vanilla and JGRPP.
@@ -24,20 +24,22 @@ from pathlib import Path
 from typing import Optional
 
 from core.models import ExecuteRequest, MetricsSnapshot
-from games.base import BaseGameIntegration
-from games.openttd_admin import AdminClient
-from games.openttd_market import OpenTTDMarket, company_price
+from core.plugin_api import BasePlugin
 
-log = logging.getLogger("games.openttd")
+from .openttd_admin import AdminClient
+from .openttd_market import OpenTTDMarket, company_price
 
-ROOT = Path(__file__).resolve().parent.parent
+log = logging.getLogger("plugins.openttd")
+
+# fridge-stream-core/ (plugins/openttd/plugin.py -> up three)
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-class OpenTTDIntegration(BaseGameIntegration):
+class OpenTTDIntegration(BasePlugin):
     name = "openttd"
 
-    def __init__(self, config: dict, store=None):
-        super().__init__(config)
+    def __init__(self, config: dict, ctx=None, store=None):
+        super().__init__(config, ctx)
         ot = config.get("openttd") or {}
         self.enabled = bool(ot.get("enabled", False))
         self.host = str(ot.get("host") or "127.0.0.1")
@@ -51,15 +53,14 @@ class OpenTTDIntegration(BaseGameIntegration):
         self.allow_host_invest = bool(ot.get("allow_host_invest", True))
         self.use_gamescript = bool(ot.get("use_gamescript", True))
         self.client: Optional[AdminClient] = None
-        self.store = store
-        self.market = OpenTTDMarket(ROOT / "data" / "stream_core.db")
+        self.store = store if store is not None else (ctx.store if ctx else None)
+        # Chat Fund ledger stays in Core's own SQLite file (checklists/openttd.md)
+        root = ctx.root if ctx else ROOT
+        self.market = OpenTTDMarket(root / "data" / "stream_core.db")
         self.last_error = ""
 
     def overlay_catalog(self) -> list[dict]:
-        core = self.config.get("core") or {}
-        host = core.get("host") or "127.0.0.1"
-        port = int(core.get("port") or 3850)
-        base = f"http://{host}:{port}/overlay"
+        base = (self.ctx.core_url() if self.ctx else "http://127.0.0.1:3850") + "/overlay"
         return [
             {
                 "name": "OpenTTD companies",
@@ -142,6 +143,28 @@ class OpenTTDIntegration(BaseGameIntegration):
             "recent": self.market.recent(10),
             "pounds_per_point": self.pounds_per_point,
         }
+
+    def status(self) -> dict:
+        return {
+            "detail": f"Admin Port {self.host}:{self.port}" + (" connected" if self.client and self.client.connected else ""),
+            "bridge_url": f"{self.host}:{self.port}",
+            "error": self.last_error,
+        }
+
+    async def state_fragment(self) -> dict:
+        try:
+            return {"openttd": self.snapshot()}
+        except Exception:
+            return {"openttd": {}}
+
+    @classmethod
+    def routes(cls, router, get_running) -> None:
+        @router.get("/api/openttd/state")
+        async def openttd_state():
+            ot = get_running()
+            if ot is not None:
+                return ot.snapshot()
+            return {"connected": False, "companies": [], "error": "openttd integration not running"}
 
     async def execute(self, req: ExecuteRequest) -> dict:
         if not self.enabled:

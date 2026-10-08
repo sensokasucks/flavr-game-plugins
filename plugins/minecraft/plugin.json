@@ -1,0 +1,235 @@
+{
+  "id": "minecraft",
+  "name": "Minecraft",
+  "version": "1.0.0",
+  "core_api": 1,
+  "kind": "python",
+  "entry": "plugin:MinecraftIntegration",
+  "description": "Chat commands (!spawn, !give ...), the stats overlay, Chat Dynamo / Kinetic power and the dividend blocks, through the Fridge Minecraft mods (Fabric or NeoForge).",
+  "links": [
+    {
+      "name": "Fridge Minecraft mods",
+      "url": "https://github.com/sensokasucks/flavr-leftovers/tree/main/fridge-minecraft"
+    }
+  ],
+  "config_defaults": {
+    "player_name": "YourInGameName",
+    "client_mod_url": "http://127.0.0.1:3852",
+    "server_mod_url": "http://127.0.0.1:3853",
+    "market": {
+      "dynamo_symbols": [
+        "MINECRAF"
+      ],
+      "dynamo_min_factor": 0.25,
+      "dynamo_max_factor": 3.0,
+      "vault_symbol": "MINECRAF",
+      "vault_rf_per_point": 200,
+      "vault_min_rf": 1000,
+      "chest_symbol": "MINECRAF",
+      "chest_points_per_xp": 1.0,
+      "chest_min_xp": 1.0,
+      "power_drain": true,
+      "power_drain_bps": 80,
+      "dynamo_off_below": 0.5,
+      "max_rf_per_tick": 2400,
+      "chest_default_value": 0.05,
+      "chest_use_smelt_xp": true,
+      "chest_item_values": {
+        "minecraft:ancient_debris": 2.0,
+        "minecraft:netherite_ingot": 4.0,
+        "minecraft:diamond": 2.0,
+        "minecraft:emerald": 1.5,
+        "minecraft:raw_gold": 1.0,
+        "minecraft:gold_ingot": 1.0,
+        "minecraft:raw_iron": 0.7,
+        "minecraft:iron_ingot": 0.7,
+        "minecraft:raw_copper": 0.4,
+        "minecraft:coal": 0.1,
+        "minecraft:oak_log": 0.15,
+        "minecraft:cobblestone": 0.05,
+        "minecraft:dirt": 0.02,
+        "minecraft:netherrack": 0.02,
+        "minecraft:blaze_rod": 1.0,
+        "minecraft:ender_pearl": 1.2
+      }
+    }
+  },
+  "command_group": {
+    "description": "Minecraft integration (!spawn, !give, …)"
+  },
+  "settings": [
+    {
+      "key": "player_name",
+      "label": "In-game player name",
+      "type": "text",
+      "help": "Exact name commands target"
+    },
+    {
+      "key": "client_mod_url",
+      "label": "Client mod URL",
+      "type": "url",
+      "placeholder": "http://127.0.0.1:3852"
+    },
+    {
+      "key": "server_mod_url",
+      "label": "Server mod URL",
+      "type": "url",
+      "placeholder": "http://127.0.0.1:3853"
+    }
+  ],
+  "market": {
+    "title": "Minecraft dynamo + vaults",
+    "hint": "Chat Dynamo / Kinetic power follows the average price/base of the dynamo symbols. The Dividend Dynamo and Dividend Chest pay holders of their ticker.",
+    "fields": [
+      {
+        "key": "market.dynamo_symbols",
+        "label": "Dynamo symbols (comma)",
+        "type": "list",
+        "upper": true,
+        "placeholder": "MINECRAF",
+        "group": "Dynamo boost"
+      },
+      {
+        "key": "market.dynamo_min_factor",
+        "label": "Min factor",
+        "type": "number",
+        "step": 0.05,
+        "min": 0.05,
+        "group": "Dynamo boost"
+      },
+      {
+        "key": "market.dynamo_max_factor",
+        "label": "Max factor",
+        "type": "number",
+        "step": 0.05,
+        "min": 0.25,
+        "group": "Dynamo boost"
+      },
+      {
+        "key": "market.power_drain",
+        "label": "Drain tickers when Chat Dynamo / Kinetic output",
+        "type": "checkbox",
+        "group": "Dynamo boost"
+      },
+      {
+        "key": "market.power_drain_bps",
+        "label": "Drain rate (bps / drain-level tick)",
+        "type": "number",
+        "min": 0,
+        "step": 1,
+        "group": "Dynamo boost"
+      },
+      {
+        "key": "market.dynamo_off_below",
+        "label": "Off below factor",
+        "type": "number",
+        "step": 0.05,
+        "min": 0,
+        "group": "Dynamo boost"
+      },
+      {
+        "key": "market.max_rf_per_tick",
+        "label": "Max FE/t",
+        "type": "number",
+        "min": 0,
+        "group": "Dynamo boost"
+      },
+      {
+        "key": "market.vault_symbol",
+        "label": "Pays ticker",
+        "type": "text",
+        "upper": true,
+        "group": "Dividend Dynamo (eats RF)"
+      },
+      {
+        "key": "market.vault_rf_per_point",
+        "label": "RF per point",
+        "type": "number",
+        "min": 1,
+        "group": "Dividend Dynamo (eats RF)"
+      },
+      {
+        "key": "market.vault_min_rf",
+        "label": "Flush at RF",
+        "type": "number",
+        "min": 1,
+        "group": "Dividend Dynamo (eats RF)"
+      },
+      {
+        "key": "market.chest_symbol",
+        "label": "Pays ticker",
+        "type": "text",
+        "upper": true,
+        "group": "Dividend Chest (any item)"
+      },
+      {
+        "key": "market.chest_points_per_xp",
+        "label": "Points per work unit",
+        "type": "number",
+        "step": 0.1,
+        "min": 0,
+        "group": "Dividend Chest (any item)"
+      },
+      {
+        "key": "market.chest_min_xp",
+        "label": "Flush at units",
+        "type": "number",
+        "step": 0.1,
+        "min": 0,
+        "group": "Dividend Chest (any item)"
+      },
+      {
+        "key": "market.chest_default_value",
+        "label": "Default item value",
+        "type": "number",
+        "step": 0.01,
+        "min": 0,
+        "group": "Dividend Chest (any item)"
+      },
+      {
+        "key": "market.chest_use_smelt_xp",
+        "label": "Use furnace XP when not listed",
+        "type": "checkbox",
+        "group": "Dividend Chest (any item)"
+      },
+      {
+        "key": "market.chest_item_values",
+        "label": "Item values (id:value per line)",
+        "type": "map",
+        "placeholder": "minecraft:diamond:2\nminecraft:dirt:0.02",
+        "group": "Dividend Chest (any item)"
+      }
+    ]
+  },
+  "market_books": [
+    {
+      "symbol": "MINECRAF",
+      "name": "Minecraft",
+      "role": "streamer",
+      "price": 8.5
+    },
+    {
+      "symbol": "STEVE",
+      "name": "Streamer",
+      "role": "plain",
+      "price": 8.5
+    }
+  ],
+  "overlays": [
+    {
+      "name": "Minecraft / metrics overlay",
+      "file": "overlay.html",
+      "notes": "HP, CPM, power level, inventory flash"
+    },
+    {
+      "name": "Minecraft market tape",
+      "file": "market-minecraft.html",
+      "notes": "MINECRAF + vault/chest feed"
+    },
+    {
+      "name": "Minecraft dynamo",
+      "file": "market-minecraft-dynamo.html",
+      "notes": "Power level + stock factor"
+    }
+  ]
+}

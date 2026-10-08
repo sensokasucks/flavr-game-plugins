@@ -1,0 +1,96 @@
+{
+  "companies": {
+    "aliases": [
+      "tickers",
+      "ottd"
+    ],
+    "permission": "public",
+    "description": "List OpenTTD companies and chat-funded totals",
+    "args": [],
+    "group": "openttd",
+    "handler": "game",
+    "cost": 0,
+    "examples": [
+      "!companies",
+      "!tickers"
+    ]
+  },
+  "quote": {
+    "aliases": [
+      "ottdquote"
+    ],
+    "permission": "public",
+    "description": "Quote one OpenTTD company",
+    "args": [
+      "company"
+    ],
+    "group": "openttd",
+    "handler": "game",
+    "cost": 0,
+    "examples": [
+      "!quote 1",
+      "!quote Red"
+    ]
+  },
+  "invest": {
+    "aliases": [
+      "fund",
+      "subsidy"
+    ],
+    "permission": "public",
+    "description": "Spend points to fund an OpenTTD company (Chat Fund)",
+    "args": [
+      "company",
+      "points"
+    ],
+    "group": "openttd",
+    "handler": "game",
+    "cost": 0,
+    "examples": [
+      "!invest 1 50",
+      "!fund Red 100"
+    ]
+  },
+  "ottdfund": {
+    "aliases": [
+      "chatfund"
+    ],
+    "permission": "public",
+    "description": "Show Chat Fund totals per company",
+    "args": [],
+    "group": "openttd",
+    "handler": "game",
+    "cost": 0
+  },
+  "ottdsay": {
+    "aliases": [
+      "ttsay"
+    ],
+    "permission": "mod",
+    "description": "Broadcast a message into OpenTTD",
+    "args": [
+      "message"
+    ],
+    "group": "openttd",
+    "handler": "game",
+    "cost": 0
+  },
+  "ottdpause": {
+    "aliases": [],
+    "permission": "mod",
+    "description": "Pause the OpenTTD server",
+    "args": [],
+    "group": "openttd",
+    "handler": "game",
+    "cost": 0
+  },
+  "ottdunpause": {
+    "aliases": [],
+    "permission": "mod",
+    "description": "Unpause the OpenTTD server",
+    "args": [],
+    "group": "openttd",
+    "handler": "game",
+    "cost": 0
+  }
+}
