@@ -19,7 +19,7 @@ import logging
 import struct
 from typing import Callable, Optional
 
-log = logging.getLogger("games.openttd.admin")
+log = logging.getLogger("plugins.openttd.admin")
 
 # Client → server
 ADMIN_JOIN = 0

@@ -7,11 +7,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[3]       # fridge-stream-core/
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from games.openttd_market import OpenTTDMarket, company_price
+from plugins.openttd.openttd_market import OpenTTDMarket, company_price
 from core.config import DEFAULTS
 
 

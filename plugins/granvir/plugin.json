@@ -1,0 +1,62 @@
+{
+  "id": "granvir",
+  "name": "Granvir",
+  "version": "1.0.0",
+  "core_api": 1,
+  "kind": "http",
+  "description": "Stats overlays from Fridge Granvir Stats (BepInEx plugin or its mock server on port 3855). Co-op writes stay host-only inside the plugin.",
+  "links": [
+    {
+      "name": "Fridge Granvir Stats",
+      "url": "https://github.com/sensokasucks/flavr-leftovers/tree/main/fridge-granvir-stats"
+    }
+  ],
+  "config_defaults": {
+    "bridge_url": "http://127.0.0.1:3855"
+  },
+  "command_group": {
+    "description": "Granvir stats overlay (BepInEx bridge on :3855)"
+  },
+  "settings": [
+    {
+      "key": "bridge_url",
+      "label": "Bridge URL",
+      "type": "url",
+      "placeholder": "http://127.0.0.1:3855"
+    }
+  ],
+  "http": {
+    "base_url_key": "bridge_url",
+    "health": "/stats",
+    "stats": "/stats",
+    "execute": "/command",
+    "execute_error_hint": "Granvir commands are host-only and need the BepInEx plugin"
+  },
+  "bridge_overlays": [
+    {
+      "name": "Full stats overlay",
+      "path": "overlay.html",
+      "notes": "Health, heat, campaign, squad"
+    },
+    {
+      "name": "Health",
+      "path": "health.html",
+      "notes": "Pilot / mech durability"
+    },
+    {
+      "name": "Heat",
+      "path": "heat.html",
+      "notes": "Generator heat"
+    },
+    {
+      "name": "Campaign",
+      "path": "campaign.html",
+      "notes": "Region, hours, credits, threat"
+    },
+    {
+      "name": "Squad",
+      "path": "squad.html",
+      "notes": "Co-op pilots"
+    }
+  ]
+}

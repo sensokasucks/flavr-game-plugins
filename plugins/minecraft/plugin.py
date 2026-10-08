@@ -1,8 +1,9 @@
 """
-Minecraft game integration.
+Minecraft plugin.
 
 Talks to the Fabric client-mod (stats) and server-mod
 (command execution + Chat Dynamo + dividend vaults) over HTTP.
+Mods: fridge-minecraft/ (Fabric + NeoForge).
 """
 
 from __future__ import annotations
@@ -13,9 +14,9 @@ from typing import Optional
 import httpx
 
 from core.models import ExecuteRequest, MetricsSnapshot
-from games.base import BaseGameIntegration
+from core.plugin_api import BasePlugin
 
-log = logging.getLogger("games.minecraft")
+log = logging.getLogger("plugins.minecraft")
 
 
 def _mc_market_cfg(config: dict) -> dict:
@@ -76,11 +77,11 @@ def plan_chest_burns(
     return consume, work
 
 
-class MinecraftIntegration(BaseGameIntegration):
+class MinecraftIntegration(BasePlugin):
     name = "minecraft"
 
-    def __init__(self, config: dict):
-        super().__init__(config)
+    def __init__(self, config: dict, ctx=None):
+        super().__init__(config, ctx)
         mc = config.get("minecraft", {})
         self.enabled = bool(mc.get("enabled", False))
         self.player = mc.get("player_name", "Player")
@@ -453,11 +454,53 @@ class MinecraftIntegration(BaseGameIntegration):
         return paid
 
     def overlay_catalog(self) -> list[dict]:
-        base = "http://127.0.0.1:3850/overlay"
+        base = (self.ctx.core_url() if self.ctx else "http://127.0.0.1:3850") + "/overlay"
         return [
+            {"name": "Minecraft / metrics overlay", "url": f"{base}/overlay.html", "notes": "HP, CPM, power level, inventory flash"},
             {"name": "Minecraft market tape", "url": f"{base}/market-minecraft.html", "notes": "MINECRAF + vault/chest feed"},
             {"name": "Minecraft dynamo", "url": f"{base}/market-minecraft-dynamo.html", "notes": "Power level + stock factor"},
         ]
+
+    def status(self) -> dict:
+        return {"detail": f"player {self.player}", "player_name": self.player}
+
+    def market_status(self) -> list[str]:
+        boost = self.stock_boost()
+        bits = " · ".join(
+            f"{row.get('symbol')} {float(row.get('factor') or 0):.2f}×" for row in boost.get("symbols") or []
+            if isinstance(row, dict)
+        ) or "no quotes"
+        vault = self.last_vault or {}
+        lines = [
+            f"Boost now: {float(boost.get('factor') or 1):.2f}×  ({bits})",
+            f"Dividend Dynamo: pending RF {vault.get('pendingRf', '—')}  lifetime {vault.get('lifetimeRf', '—')}",
+            f"Dividend Chest: pending XP {vault.get('pendingXp', '—')}  lifetime {vault.get('lifetimeXp', '—')}",
+        ]
+        devices = (self.last_devices or {}).get("devices") or []
+        if devices:
+            lines += [
+                f"{d.get('kind')}  drain {d.get('drainRate') or 0}/15  FE {d.get('orderedRf') or 0}/t  {d.get('id')}"
+                for d in devices if isinstance(d, dict)
+            ]
+        else:
+            lines.append("(no Fridge blocks reported: place a Dynamo / Chest)")
+        return lines
+
+    async def state_fragment(self) -> dict:
+        """Client-mod stats for the metrics overlay (overlay.html)."""
+        stats = await self.fetch_client_stats() or {}
+        inventory = stats.get("inventory") if isinstance(stats, dict) else None
+        return {"stats": stats, "inventory": inventory, "showInventory": bool(inventory)}
+
+    @classmethod
+    def routes(cls, router, get_running) -> None:
+        @router.get("/api/stats")
+        async def minecraft_stats():
+            """Live player stats from the Minecraft client mod (empty while it's off)."""
+            mc = get_running()
+            if mc is not None:
+                return await mc.fetch_client_stats()
+            return {}
 
     async def fetch_client_stats(self) -> dict:
         if not self._client:

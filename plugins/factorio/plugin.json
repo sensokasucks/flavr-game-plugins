@@ -1,0 +1,174 @@
+{
+  "id": "factorio",
+  "name": "Factorio",
+  "version": "1.0.0",
+  "core_api": 1,
+  "kind": "python",
+  "entry": "plugin:FactorioIntegration",
+  "description": "Stats overlays and Chat Dynamo power through the Fridge Factorio Stats bridge (RCON + overlay on port 3847, a separate Node program).",
+  "links": [
+    {
+      "name": "Fridge Factorio Stats",
+      "url": "https://github.com/sensokasucks/flavr-leftovers/tree/main/fridge-factorio-stats"
+    }
+  ],
+  "config_defaults": {
+    "bridge_url": "http://127.0.0.1:3847",
+    "market": {
+      "dynamo_symbols": [
+        "FACTORIO"
+      ],
+      "dynamo_min_factor": 0.25,
+      "dynamo_max_factor": 3.0,
+      "vault_symbol": "FACTORIO",
+      "chest_symbol": "FACTORIO",
+      "vault_flush_mj": 25,
+      "chest_flush_items": 20,
+      "power_drain": false,
+      "power_drain_bps": 12
+    }
+  },
+  "command_group": {
+    "description": "Factorio stats overlay (Fridge Factorio Stats bridge)"
+  },
+  "settings": [
+    {
+      "key": "bridge_url",
+      "label": "Bridge URL",
+      "type": "url",
+      "placeholder": "http://127.0.0.1:3847"
+    }
+  ],
+  "market": {
+    "title": "Factorio tickers",
+    "hint": "Chat Dynamo uses the average price/base of these symbols. Vaults pay the listed ticker(s); comma = split the payout.",
+    "fields": [
+      {
+        "key": "market.dynamo_symbols",
+        "label": "Dynamo symbols (comma)",
+        "type": "list",
+        "upper": true,
+        "placeholder": "FACTORIO",
+        "group": "Factorio tickers"
+      },
+      {
+        "key": "market.dynamo_min_factor",
+        "label": "Min factor",
+        "type": "number",
+        "step": 0.05,
+        "min": 0.05,
+        "group": "Factorio tickers"
+      },
+      {
+        "key": "market.dynamo_max_factor",
+        "label": "Max factor",
+        "type": "number",
+        "step": 0.05,
+        "min": 0.25,
+        "group": "Factorio tickers"
+      },
+      {
+        "key": "market.vault_symbol",
+        "label": "Power Vault pays",
+        "type": "text",
+        "upper": true,
+        "placeholder": "FACTORIO",
+        "group": "Factorio tickers"
+      },
+      {
+        "key": "market.chest_symbol",
+        "label": "Item Vault pays",
+        "type": "text",
+        "upper": true,
+        "placeholder": "FACTORIO",
+        "group": "Factorio tickers"
+      },
+      {
+        "key": "market.vault_flush_mj",
+        "label": "Flush at MJ",
+        "type": "number",
+        "min": 1,
+        "group": "Factorio tickers"
+      },
+      {
+        "key": "market.chest_flush_items",
+        "label": "Flush at items",
+        "type": "number",
+        "min": 1,
+        "group": "Factorio tickers"
+      },
+      {
+        "key": "market.power_drain",
+        "label": "Drain FACTORIO when Chat Dynamo outputs",
+        "type": "checkbox",
+        "group": "Factorio tickers"
+      },
+      {
+        "key": "market.power_drain_bps",
+        "label": "Drain rate (bps / full power tick)",
+        "type": "number",
+        "min": 0,
+        "step": 1,
+        "group": "Factorio tickers"
+      }
+    ]
+  },
+  "market_books": [
+    {
+      "symbol": "FACTORIO",
+      "name": "Factorio",
+      "role": "streamer",
+      "price": 12.0,
+      "steam_appid": 427520
+    }
+  ],
+  "overlays": [
+    {
+      "name": "Factorio market tape",
+      "file": "market-factorio.html",
+      "notes": "FACTORIO ticker + vault drain"
+    }
+  ],
+  "bridge_overlays": [
+    {
+      "name": "Full stats overlay",
+      "path": "overlay.html",
+      "notes": "Power, research, kills, deaths, evolution, alerts"
+    },
+    {
+      "name": "Power",
+      "path": "power.html",
+      "notes": "Production / consumption"
+    },
+    {
+      "name": "Research",
+      "path": "research.html",
+      "notes": "Current tech + progress"
+    },
+    {
+      "name": "Kills",
+      "path": "kills.html",
+      "notes": "Biters down"
+    },
+    {
+      "name": "Deaths",
+      "path": "deaths.html",
+      "notes": "Player deaths"
+    },
+    {
+      "name": "Evolution",
+      "path": "evolution.html",
+      "notes": "Evolution factor"
+    },
+    {
+      "name": "Combat",
+      "path": "combat.html",
+      "notes": "Kills + deaths"
+    },
+    {
+      "name": "Alerts",
+      "path": "alerts.html",
+      "notes": "Factory alerts"
+    }
+  ]
+}

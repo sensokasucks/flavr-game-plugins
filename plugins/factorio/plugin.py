@@ -1,5 +1,5 @@
 """
-Factorio game integration.
+Factorio plugin.
 
 Talks to the standalone Fridge Factorio Stats bridge (default :3847).
 That process owns RCON + Wiretap + overlay files; Core:
@@ -7,7 +7,7 @@ That process owns RCON + Wiretap + overlay files; Core:
   - lists overlay URLs in Admin → Integrations
   - POSTs /api/metrics (power_level 0–15) so Chat Dynamos in-game generate electricity
 
-Enable with factorio.enabled=true and keep the Node bridge running.
+Enable with factorio.enabled=true and keep the Node bridge running (fridge-factorio-stats/).
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ from urllib.parse import urljoin
 import httpx
 
 from core.models import ExecuteRequest, MetricsSnapshot
-from games.base import BaseGameIntegration
+from core.plugin_api import BasePlugin
 
-log = logging.getLogger("games.factorio")
+log = logging.getLogger("plugins.factorio")
 
 OVERLAY_PAGES = (
     ("Full stats overlay", "overlay.html", "Power, research, kills, deaths, evolution, alerts"),
@@ -35,11 +35,11 @@ OVERLAY_PAGES = (
 )
 
 
-class FactorioIntegration(BaseGameIntegration):
+class FactorioIntegration(BasePlugin):
     name = "factorio"
 
-    def __init__(self, config: dict):
-        super().__init__(config)
+    def __init__(self, config: dict, ctx=None):
+        super().__init__(config, ctx)
         fx = config.get("factorio") or {}
         self.enabled = bool(fx.get("enabled", False))
         self.bridge_url = str(fx.get("bridge_url") or "http://127.0.0.1:3847").rstrip("/")
@@ -54,9 +54,10 @@ class FactorioIntegration(BaseGameIntegration):
             {"name": title, "url": urljoin(base + "/", path), "notes": notes}
             for title, path, notes in OVERLAY_PAGES
         ]
+        core = self.ctx.core_url() if self.ctx else "http://127.0.0.1:3850"
         pages.append({
             "name": "Factorio market tape",
-            "url": "http://127.0.0.1:3850/overlay/market-factorio.html",
+            "url": f"{core}/overlay/market-factorio.html",
             "notes": "FACTORIO ticker + vault drain",
         })
         return pages
@@ -140,6 +141,21 @@ class FactorioIntegration(BaseGameIntegration):
             frac = -(bps / 10_000.0) * (snap.power_level / 15.0)
             for sym in self._symbols(cfg.get("dynamo_symbols") or ["FACTORIO"]):
                 self._market.apply_return(sym, frac, reason="power_drain")
+
+    def market_status(self) -> list[str]:
+        boost = self._boost()
+        bits = " · ".join(
+            f"{row.get('symbol')} {float(row.get('factor') or 0):.2f}×" for row in boost.get("symbols") or []
+            if isinstance(row, dict)
+        ) or "no quotes"
+        return [f"Boost now: {float(boost.get('factor') or 1):.2f}×  ({bits})"]
+
+    @staticmethod
+    def dividend_defaults(body: dict, market_cfg: dict) -> dict:
+        """Power / Item Vault flushes from the bridge: older bridges send no symbol."""
+        symbol = "FACT" if str(body.get("unit") or "") == "items" else "PWR"
+        rates = market_cfg.get("factorio") if isinstance(market_cfg.get("factorio"), dict) else None
+        return {"symbol": symbol, **({"rates": rates} if rates else {})}
 
     async def fetch_stats(self) -> dict:
         if not self._client:

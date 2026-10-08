@@ -1,6 +1,6 @@
 # Checklist — OpenTTD
 
-Home: `games/openttd.py`, `games/openttd_admin.py`, `games/openttd_market.py`, `games/OPENTTD.md`, GS `gamescripts/FridgeChatFund`.
+Home: plugin `fridge-stream-core/plugins/openttd/` (`plugin.py`, `openttd_admin.py`, `openttd_market.py`, `README.md`, `commands.json`, `overlay/`, GS `gamescript/FridgeChatFund`). Plugin rules: [plugins.md](plugins.md).
 
 ## Must keep
 
@@ -16,11 +16,11 @@ Home: `games/openttd.py`, `games/openttd_admin.py`, `games/openttd_market.py`, `
 - [ ] Chat Fund ledger is Core SQLite. Points debit via `store`. Map cash via FridgeChatFund `ChangeBankBalance`.
 - [ ] **Do not** use vanilla / JGR 25% share slots. Trunk removed them (#10709). JGR `allow_shares` stays off on the stream server.
 - [ ] No NewGRF / GS hack to restore shares. That path is closed.
-- [ ] Overlays: `/overlay/openttd.html`, `/overlay/openttd-ticker.html`. API `GET /api/openttd/state`.
+- [ ] Overlays: `/overlay/openttd.html`, `/overlay/openttd-ticker.html` (files in the plugin's `overlay/`, same URLs). API `GET /api/openttd/state` (plugin route; answers "not connected" while off).
 - [ ] Fridge Market may list the host / AI companies as a **price feed**. That listing is not a second Chat Fund and must not buy the 25% slots.
 - [ ] Token split from Market: keep `!invest` / `!quote` / `!companies` on group `openttd`.
 - [ ] `use_gamescript: true` by default so FridgeChatFund injects cash. Without GS, announce-only is acceptable; do not silently start clicking share buttons instead.
-- [ ] Docs: `games/OPENTTD.md` stays accurate.
+- [ ] Docs: `plugins/openttd/README.md` stays accurate.
 
 ## Drop risks
 
@@ -31,5 +31,5 @@ Home: `games/openttd.py`, `games/openttd_admin.py`, `games/openttd_market.py`, `
 ## After-change verify
 
 - [ ] Example config still has the `openttd:` block (host, admin_port, pounds_per_point, min/max invest, use_gamescript).
-- [ ] FridgeChatFund folder still ships under `gamescripts/`.
+- [ ] FridgeChatFund folder still ships under `plugins/openttd/gamescript/` (and so in the games pack).
 - [ ] Admin Integrations / Sources still mention the OpenTTD overlays.

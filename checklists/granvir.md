@@ -1,6 +1,6 @@
 # Checklist — Granvir
 
-Home: `fridge-granvir-stats/` (BepInEx `plugin/`, `overlay/`, `mock/mock_server.py`). Core slot: `games/granvir.py`.
+Home: `fridge-granvir-stats/` (BepInEx `plugin/`, `overlay/`, `mock/mock_server.py`). Core side: manifest-only http plugin `fridge-stream-core/plugins/granvir/plugin.json` (Core's `HttpPlugin` does the talking). Plugin rules: [plugins.md](plugins.md).
 
 ## Must keep
 

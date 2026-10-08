@@ -1,6 +1,6 @@
 # Checklist — Factorio
 
-Home: `fridge-factorio-stats/` (Lua `mod/`, Node `server/`, `overlay/`). Core slot: `games/factorio.py`.
+Home: `fridge-factorio-stats/` (Lua `mod/`, Node `server/`, `overlay/`). Core side: plugin `fridge-stream-core/plugins/factorio/` (`plugin.py`, `plugin.json`, `overlay/market-factorio.html`). Plugin rules: [plugins.md](plugins.md).
 
 ## Must keep
 
@@ -26,5 +26,5 @@ Home: `fridge-factorio-stats/` (Lua `mod/`, Node `server/`, `overlay/`). Core sl
 ## After-change verify
 
 - [ ] Split overlay files still exist under `fridge-factorio-stats/overlay/`.
-- [ ] Example config `factorio.market` keys match what `games/factorio.py` reads.
+- [ ] Example config `factorio.market` keys match what `plugins/factorio/plugin.py` reads and the `market` fields in its `plugin.json`.
 - [ ] Sources list still mentions :3847.
