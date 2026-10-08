@@ -126,7 +126,11 @@
     {
       "name": "Factorio market tape",
       "file": "market-factorio.html",
-      "notes": "FACTORIO ticker + vault drain"
+      "notes": "FACTORIO ticker + vault drain",
+      "params": [
+        {"key": "symbols", "label": "Tickers", "type": "text", "default": "", "help": "Comma-separated, empty = all", "placeholder": "FRG,FACT"},
+        {"key": "speed", "label": "Scroll speed", "type": "number", "default": 80, "help": "Pixels per second", "min": 10, "max": 400, "step": 10}
+      ]
     }
   ],
   "bridge_overlays": [

@@ -97,7 +97,11 @@
     {
       "name": "OpenTTD market",
       "file": "market-openttd.html",
-      "notes": "HOST / OpenTTD listing"
+      "notes": "HOST / OpenTTD listing",
+      "params": [
+        {"key": "symbols", "label": "Tickers", "type": "text", "default": "", "help": "Comma-separated, empty = all", "placeholder": "FRG,FACT"},
+        {"key": "speed", "label": "Scroll speed", "type": "number", "default": 80, "help": "Pixels per second", "min": 10, "max": 400, "step": 10}
+      ]
     }
   ]
 }
