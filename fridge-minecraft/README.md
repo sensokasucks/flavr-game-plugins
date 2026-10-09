@@ -1,6 +1,6 @@
 # Fridge Minecraft Mods
 
-Fabric mods that plug into **[Fridge Stream Core](../fridge-stream-core/)**.
+Fabric mods that plug into **[Fridge Stream Core](https://github.com/sensokasucks/flavr-leftovers/tree/main/fridge-stream-core)** (Core side: [plugins/minecraft](../plugins/minecraft/)).
 
 Chat, permissions, commands, metrics, and the overlay all live in Stream Core now.  
 This folder only contains the game-side pieces.

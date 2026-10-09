@@ -1,0 +1,38 @@
+# FlaVR game plugins
+
+Optional games for **[FlaVR Stream Core](https://github.com/sensokasucks/flavr-leftovers)**:
+chat commands, overlays, Market listings and stream-power hooks for Minecraft, Factorio, Granvir
+and OpenTTD. Stream Core runs fine without any of them; install only the games you stream.
+
+| Game | Core plugin | Game side | Ports |
+|------|-------------|-----------|-------|
+| Minecraft | [plugins/minecraft](plugins/minecraft/) | [fridge-minecraft](fridge-minecraft/): Fabric client + server mods, NeoForge | 3852 / 3853 |
+| Factorio | [plugins/factorio](plugins/factorio/) | [fridge-factorio-stats](fridge-factorio-stats/): Lua mod, Node bridge, overlays, Chat Dynamo | 3847 |
+| Granvir | [plugins/granvir](plugins/granvir/) (just a `plugin.json`) | [fridge-granvir-stats](fridge-granvir-stats/): BepInEx plugin, overlays, mock bridge (`START Granvir Mock.bat`) | 3855 |
+| OpenTTD | [plugins/openttd](plugins/openttd/) (Admin Port client, Chat Fund, FridgeChatFund game script) | the OpenTTD / JGRPP server itself | 3977 (Admin Port) |
+
+## Installing a game
+
+1. Download this repo (green **Code → Download ZIP**, or the games pack zip from **Releases**).
+2. Copy the game's folder from `plugins/` into Stream Core's `fridge-stream-core\plugins\`
+   (you end up with `fridge-stream-core\plugins\minecraft\plugin.json`).
+3. Restart Stream Core. The game gets a card under **Settings → Game plugins**.
+4. Tick **Enabled**, **Save & apply**, restart Core again.
+5. Set up the game side (mod, bridge or server) from its folder's README.
+
+Removing a game: untick it, delete its folder from `fridge-stream-core\plugins\`, restart Core.
+Its settings stay in `config.yaml` in case you put it back.
+
+**Keeping games up to date with git:** clone this repo next to flavr-leftovers and start Core with
+`STREAM_CORE_PLUGINS_DIR` set to this repo's `plugins` folder; `git pull` here then updates every game.
+
+## For developers
+
+- Plugin format and Core's plugin API: [docs/PLUGINS.md](https://github.com/sensokasucks/flavr-leftovers/blob/main/fridge-stream-core/docs/PLUGINS.md) in flavr-leftovers.
+- Feature contracts per game: [checklists/](checklists/).
+- Tests run against a Stream Core checkout. With flavr-leftovers cloned next to this repo (or
+  `STREAM_CORE_DIR` pointing at its `fridge-stream-core` folder): `python -m pytest -q`.
+- Games pack zip for a release: `python tools/pack_games.py` (writes `dist/StreamCore-games-pack-<date>.zip`,
+  unzips straight into `fridge-stream-core`).
+
+These folders moved here from flavr-leftovers on 2026-10-09 with their git history.

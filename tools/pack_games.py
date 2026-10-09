@@ -1,7 +1,7 @@
 """
-Build the games pack: StreamCore-games-pack-<version>.zip with every game plugin folder.
+Build the games pack: StreamCore-games-pack-<version>.zip with every game plugin folder in this repo.
 
-Unzip it into fridge-stream-core/ (it holds plugins/<id>/...), restart Core, and the games show
+Unzip it into Stream Core's fridge-stream-core/ folder (it holds plugins/<id>/...), restart Core, and the games show
 under Settings -> Game plugins. Only files git tracks go in (no __pycache__, data or local
 edits that were never committed); tests stay out.
 

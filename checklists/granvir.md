@@ -1,6 +1,6 @@
 # Checklist — Granvir
 
-Home: `fridge-granvir-stats/` (BepInEx `plugin/`, `overlay/`, `mock/mock_server.py`). Core side: manifest-only http plugin `fridge-stream-core/plugins/granvir/plugin.json` (Core's `HttpPlugin` does the talking). Plugin rules: [plugins.md](plugins.md).
+Home: `fridge-granvir-stats/` (BepInEx `plugin/`, `overlay/`, `mock/mock_server.py`). Core side: manifest-only http plugin `plugins/granvir/plugin.json` (Core's `HttpPlugin` does the talking). Plugin rules: [plugins.md](https://github.com/sensokasucks/flavr-leftovers/blob/main/checklists/plugins.md) (in flavr-leftovers).
 
 ## Must keep
 
@@ -9,7 +9,7 @@ Home: `fridge-granvir-stats/` (BepInEx `plugin/`, `overlay/`, `mock/mock_server.
 - [ ] Core opt-in: `granvir.enabled` default **false**. `granvir.bridge_url` default `http://127.0.0.1:3855`.
 - [ ] **Host-only writes.** Clients do not need the plugin. `HostOnlyWrites = true` by default.
 - [ ] Never mutate shared campaign / depot / part state from a client.
-- [ ] `mock/mock_server.py` + `START Granvir Mock.bat` / package `START Mock.bat` still run without the game.
+- [ ] `mock/mock_server.py` + `START Granvir Mock.bat` (repo root) / `fridge-granvir-stats/START Mock.bat` still run without the game.
 - [ ] Plugin degrades to empty fields on rename (reflection probe) instead of crashing.
 - [ ] Admin → Integrations shows Granvir when the slot exists; health ping hits :3855.
 

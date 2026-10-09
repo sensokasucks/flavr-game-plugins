@@ -127,7 +127,7 @@ Open `Assembly-CSharp.dll`. Search these names / fragments:
 
 Opt-in slot in `fridge-stream-core`:
 
-- `fridge-stream-core/plugins/granvir/plugin.json` (http plugin: Core's built-in client talks to this bridge)
+- `plugins/granvir/plugin.json` in this repo, copied to `fridge-stream-core/plugins/granvir/` (http plugin: Core's built-in client talks to this bridge)
 - Admin → Config → Granvir
 - Command group `granvir` (active only when the integration is running)
 

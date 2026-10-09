@@ -1,6 +1,6 @@
 # Checklist — Minecraft
 
-Home: `fridge-minecraft/` (Fabric `client-mod` + `server-mod`, NeoForge `neoforge/`). Core side: plugin `fridge-stream-core/plugins/minecraft/` (`plugin.py`, `plugin.json`, `commands.json`, `overlay/`). Plugin rules: [plugins.md](plugins.md).
+Home: `fridge-minecraft/` (Fabric `client-mod` + `server-mod`, NeoForge `neoforge/`). Core side: plugin `plugins/minecraft/` (`plugin.py`, `plugin.json`, `commands.json`, `overlay/`). Plugin rules: [plugins.md](https://github.com/sensokasucks/flavr-leftovers/blob/main/checklists/plugins.md) (in flavr-leftovers).
 
 ## Must keep
 
@@ -13,7 +13,7 @@ Home: `fridge-minecraft/` (Fabric `client-mod` + `server-mod`, NeoForge `neoforg
 - [ ] Target: Minecraft **1.21.1**. Fabric API required for Fabric jars.
 - [ ] Client stats: health, hunger, XP/level, armor, effects, death counter, optional inventory snapshot.
 - [ ] Server executes commands Core forwards (`!spawn`, `!give`, `!heal`, quantity, permission tiers).
-- [ ] **Chat Dynamo** + **Chat Kinetic** exist. Power 0–15 from Core metrics. Market factor applied (see [market.md](market.md)). Chat Kinetic uses the same power + stock factor — no extra RPM→FE.
+- [ ] **Chat Dynamo** + **Chat Kinetic** exist. Power 0–15 from Core metrics. Market factor applied (see [market.md](https://github.com/sensokasucks/flavr-leftovers/blob/main/checklists/market.md)). Chat Kinetic uses the same power + stock factor — no extra RPM→FE.
 - [ ] Blocks: `fridge_minecraft:chat_dynamo`, `chat_kinetic`, `dividend_vault`, `dividend_chest`. Old `xsplit_*` ids are gone; worlds need blocks replaced after rebrand.
 - [ ] Dividend Chest: 54-slot hopper chest, any item, ItemHandler cap so hoppers / Create funnels can insert.
 - [ ] Command group `minecraft` binds to enabled **and** running.

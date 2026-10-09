@@ -1,6 +1,6 @@
 # Checklist — OpenTTD
 
-Home: plugin `fridge-stream-core/plugins/openttd/` (`plugin.py`, `openttd_admin.py`, `openttd_market.py`, `README.md`, `commands.json`, `overlay/`, GS `gamescript/FridgeChatFund`). Plugin rules: [plugins.md](plugins.md).
+Home: plugin `plugins/openttd/` (`plugin.py`, `openttd_admin.py`, `openttd_market.py`, `README.md`, `commands.json`, `overlay/`, GS `gamescript/FridgeChatFund`). Plugin rules: [plugins.md](https://github.com/sensokasucks/flavr-leftovers/blob/main/checklists/plugins.md) (in flavr-leftovers).
 
 ## Must keep
 
@@ -31,5 +31,5 @@ Home: plugin `fridge-stream-core/plugins/openttd/` (`plugin.py`, `openttd_admin.
 ## After-change verify
 
 - [ ] Example config still has the `openttd:` block (host, admin_port, pounds_per_point, min/max invest, use_gamescript).
-- [ ] FridgeChatFund folder still ships under `plugins/openttd/gamescript/` (and so in the games pack).
+- [ ] FridgeChatFund folder still ships under `plugins/openttd/gamescript/` (and so in the games pack zip, `tools/pack_games.py`).
 - [ ] Admin Integrations / Sources still mention the OpenTTD overlays.

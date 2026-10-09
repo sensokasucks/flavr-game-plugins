@@ -1,6 +1,6 @@
 # Checklist — Factorio
 
-Home: `fridge-factorio-stats/` (Lua `mod/`, Node `server/`, `overlay/`). Core side: plugin `fridge-stream-core/plugins/factorio/` (`plugin.py`, `plugin.json`, `overlay/market-factorio.html`). Plugin rules: [plugins.md](plugins.md).
+Home: `fridge-factorio-stats/` (Lua `mod/`, Node `server/`, `overlay/`). Core side: plugin `plugins/factorio/` (`plugin.py`, `plugin.json`, `overlay/market-factorio.html`). Plugin rules: [plugins.md](https://github.com/sensokasucks/flavr-leftovers/blob/main/checklists/plugins.md) (in flavr-leftovers).
 
 ## Must keep
 

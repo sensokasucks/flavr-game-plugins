@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+**/data/
+*.log
+
+# Java / Minecraft / Gradle
+.gradle/
+**/build/libs/
+*.jar
+!gradle-wrapper.jar
+!**/gradle/wrapper/gradle-wrapper.jar
+*.class
+
+# Node
+node_modules/
+
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
