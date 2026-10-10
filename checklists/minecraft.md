@@ -13,6 +13,7 @@ Home: `fridge-minecraft/` (Fabric `client-mod` + `server-mod`, NeoForge `neoforg
 - [ ] Target: Minecraft **1.21.1**. Fabric API required for Fabric jars.
 - [ ] Client stats: health, hunger, XP/level, armor, effects, death counter, optional inventory snapshot.
 - [ ] Server executes commands Core forwards (`!spawn`, `!give`, `!heal`, quantity, permission tiers).
+- [ ] Public commands that put chat text into the game command (`spawn`, `give`, `effect` in `plugins/minecraft/commands.json`) have an `allowedValues` list of harmless ids: no bosses, TNT, command blocks, item components / NBT. Tests: `plugins/minecraft/tests/test_minecraft_commands.py`.
 - [ ] **Chat Dynamo** + **Chat Kinetic** exist. Power 0–15 from Core metrics. Market factor applied (see [market.md](https://github.com/sensokasucks/flavr-leftovers/blob/main/checklists/market.md)). Chat Kinetic uses the same power + stock factor — no extra RPM→FE.
 - [ ] Blocks: `fridge_minecraft:chat_dynamo`, `chat_kinetic`, `dividend_vault`, `dividend_chest`. Old `xsplit_*` ids are gone; worlds need blocks replaced after rebrand.
 - [ ] Dividend Chest: 54-slot hopper chest, any item, ItemHandler cap so hoppers / Create funnels can insert.
