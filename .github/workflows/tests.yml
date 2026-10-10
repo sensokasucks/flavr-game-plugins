@@ -1,0 +1,57 @@
+# Runs the game plugins' tests on GitHub's machines for every pull request and every push to main.
+# The tests need Stream Core, so the current main branch of flavr-leftovers is downloaded next to this repo.
+# Sen's PC runs Windows + Python 3.10, so that combination is always tested; Linux covers newer Pythons.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:   # "Run workflow" button on the Actions tab
+
+# A newer push to the same pull request stops the older, now pointless run.
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false   # finish every combination so we see all failures at once
+      matrix:
+        include:
+          - { os: windows-latest, python: "3.10" }   # same as Sen's PC
+          - { os: ubuntu-latest, python: "3.12" }
+          - { os: ubuntu-latest, python: "3.13" }
+    env:
+      # conftest.py looks here for Core (see "Get Stream Core" below).
+      STREAM_CORE_DIR: ${{ github.workspace }}/_core/fridge-stream-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Stream Core (flavr-leftovers, main)
+        uses: actions/checkout@v4
+        with:
+          repository: sensokasucks/flavr-leftovers
+          ref: main
+          path: _core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: _core/fridge-stream-core/requirements.txt
+
+      - name: Install Stream Core's requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r _core/fridge-stream-core/requirements.txt pytest
+
+      - name: Run tests
+        run: python -m pytest -q
