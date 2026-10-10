@@ -32,6 +32,8 @@ Its settings stay in `config.yaml` in case you put it back.
 - Feature contracts per game: [checklists/](checklists/).
 - Tests run against a Stream Core checkout. With flavr-leftovers cloned next to this repo (or
   `STREAM_CORE_DIR` pointing at its `fridge-stream-core` folder): `python -m pytest -q`.
+- Tests run automatically on every pull request and every push to main (GitHub Actions, `.github/workflows/tests.yml`),
+  against the current `main` of flavr-leftovers, on Windows + Python 3.10 (like Sen's PC) and Linux + Python 3.12 / 3.13.
 - Games pack zip for a release: `python tools/pack_games.py` (writes `dist/StreamCore-games-pack-<date>.zip`,
   unzips straight into `fridge-stream-core`).
 
