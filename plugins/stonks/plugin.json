@@ -1,0 +1,116 @@
+{
+  "id": "stonks",
+  "name": "Gamer Stonks",
+  "version": "1.0.0",
+  "core_api": 2,
+  "kind": "python",
+  "category": "feature",
+  "entry": "plugin:GamerStonks",
+  "description": "A points stock market for your stream: tickers for your games, you and your chatters, prices that follow Steam player counts and game events, !buy / !sell with channel points, and dividends from game vaults.",
+  "provides": ["market"],
+  "config_moved_from": ["market"],
+  "specials": ["market_buy", "market_sell", "market_tickers", "market_portfolio"],
+  "config_defaults": {
+    "tick_sec": 5,
+    "noise_bps": 18,
+    "revert_bps": 15,
+    "history_len": 180,
+    "list_streamer": true,
+    "streamer_symbol": "FRG",
+    "death_return": -0.08,
+    "death_cooldown_sec": 20,
+    "signal_cooldown_sec": 15,
+    "signal_cooldown_scope": "symbol",
+    "hourly_cap_points": 500,
+    "dividend_price_bump": 0.01,
+    "points_per_unit": {"mj": 0.02, "rf": 0.005, "xp": 1.0, "items": 1.0},
+    "steam_poll_sec": 1800,
+    "chatter_points_scale": 10.0,
+    "chatter_streak_bonus": 0.05,
+    "trade_impact": true,
+    "trade_impact_bps_per_100": 40
+  },
+  "command_group": {
+    "description": "Gamer Stonks (!buy / !sell / !tickers / !portfolio)",
+    "aliases": ["market"]
+  },
+  "pages": [
+    {
+      "id": "main",
+      "title": "Gamer Stonks",
+      "file": "pages/index.html",
+      "nav": "Games",
+      "keywords": "gamer stonks market stocks tickers dividends vaults dynamo investors shares buy sell steam"
+    }
+  ],
+  "market": {
+    "title": "Gamer Stonks",
+    "hint": "These apply straight away, no restart.",
+    "fields": [
+      {"key": "trade_impact", "label": "Buying / selling moves the price", "type": "checkbox", "group": "Trading"},
+      {"key": "trade_impact_bps_per_100", "label": "Trade impact (bps per 100 points)", "type": "number", "min": 0, "step": 1, "group": "Trading"},
+      {"key": "hourly_cap_points", "label": "Most points one vault flush can pay", "type": "number", "min": 0, "step": 10, "group": "Dividends"},
+      {"key": "dividend_price_bump", "label": "Price bump per dividend (0.01 = +1%)", "type": "number", "min": 0, "step": 0.005, "group": "Dividends"},
+      {"key": "points_per_unit", "label": "Points per unit of work (unit: points)", "type": "map", "help": "mj, rf, xp, items ...", "group": "Dividends"},
+      {"key": "death_return", "label": "Price change on a player death (-0.08 = -8%)", "type": "number", "step": 0.01, "group": "Game signals"},
+      {"key": "death_cooldown_sec", "label": "Death cooldown (s, 0 = none)", "type": "number", "min": 0, "step": 1, "group": "Game signals"},
+      {"key": "signal_cooldown_sec", "label": "Other signals' cooldown (s, 0 = none)", "type": "number", "min": 0, "step": 1, "group": "Game signals"},
+      {"key": "signal_cooldown_scope", "label": "Cooldown counts per", "type": "select", "options": ["symbol", "book", "global"], "group": "Game signals"},
+      {"key": "tick_sec", "label": "Price step every (s)", "type": "number", "min": 1, "step": 1, "group": "Tape"},
+      {"key": "noise_bps", "label": "Random wander (bps per step)", "type": "number", "min": 0, "step": 1, "group": "Tape"},
+      {"key": "steam_poll_sec", "label": "Steam player count refresh (s)", "type": "number", "min": 60, "step": 60, "group": "Tape"},
+      {"key": "chatter_points_scale", "label": "Chatter price = points ÷", "type": "number", "min": 1, "step": 1, "group": "Chatter listings"},
+      {"key": "chatter_streak_bonus", "label": "Chatter streak bonus per stream", "type": "number", "min": 0, "step": 0.01, "group": "Chatter listings"}
+    ]
+  },
+  "overlays": [
+    {
+      "name": "Gamer Stonks ticker",
+      "file": "market.html",
+      "notes": "Scrolling live tape",
+      "params": [
+        {"key": "symbols", "label": "Tickers", "type": "text", "default": "", "help": "Comma-separated, empty = all", "placeholder": "FRG,FACT"},
+        {"key": "book", "label": "Game book", "type": "text", "default": "", "help": "Only tickers from one game (factorio, minecraft ...)", "placeholder": "factorio"},
+        {"key": "speed", "label": "Scroll speed", "type": "number", "default": 80, "help": "Pixels per second", "min": 10, "max": 400, "step": 10}
+      ],
+      "settings": [{"label": "Gamer Stonks page", "hash": "#plg-stonks-main"}]
+    },
+    {
+      "name": "Gamer Stonks board",
+      "file": "market-board.html",
+      "notes": "Quote cards + sparklines. Transparent Webpage source.",
+      "params": [
+        {"key": "symbols", "label": "Tickers", "type": "text", "default": "", "help": "Comma-separated, empty = all", "placeholder": "FRG,FACT"},
+        {"key": "book", "label": "Game book", "type": "text", "default": "", "help": "Only tickers from one game (factorio, minecraft ...)", "placeholder": "factorio"},
+        {"key": "bare", "label": "Bare (no frame or title)", "type": "bool", "default": false, "on": "1", "off": "0", "help": ""},
+        {"key": "solid", "label": "Solid background", "type": "bool", "default": false, "on": "1", "off": "0", "help": "Opaque panel instead of transparent"}
+      ],
+      "settings": [{"label": "Gamer Stonks page", "hash": "#plg-stonks-main"}]
+    },
+    {
+      "name": "Gamer Stonks chart",
+      "file": "market-chart.html",
+      "notes": "TV-style line graph of one ticker",
+      "params": [
+        {"key": "symbol", "label": "Ticker", "type": "text", "default": "FRG", "help": "", "placeholder": "FRG"},
+        {"key": "layout", "label": "Layout", "type": "select", "default": "hero", "options": [["hero", "Hero (big)"], ["grid", "Grid"]], "help": ""},
+        {"key": "points", "label": "History points", "type": "number", "default": 120, "help": "", "min": 20, "max": 600, "step": 10},
+        {"key": "bare", "label": "Bare (no frame or title)", "type": "bool", "default": false, "on": "1", "off": "0", "help": ""},
+        {"key": "solid", "label": "Solid background", "type": "bool", "default": false, "on": "1", "off": "0", "help": "Opaque panel instead of transparent"}
+      ],
+      "settings": [{"label": "Gamer Stonks page", "hash": "#plg-stonks-main"}]
+    },
+    {
+      "name": "Gamer Stonks cycle",
+      "file": "market-cycle.html",
+      "notes": "Plays a chosen set of charts in turn",
+      "params": [
+        {"key": "symbols", "label": "Tickers", "type": "text", "default": "FRG", "help": "Comma-separated", "placeholder": "FRG,FACT,STEVE"},
+        {"key": "dwell", "label": "Seconds per chart", "type": "number", "default": 8, "help": "", "min": 2, "max": 120, "step": 1},
+        {"key": "points", "label": "History points", "type": "number", "default": 180, "help": "", "min": 20, "max": 600, "step": 10},
+        {"key": "solid", "label": "Solid background", "type": "bool", "default": false, "on": "1", "off": "0", "help": "Opaque panel instead of transparent"}
+      ],
+      "settings": [{"label": "Gamer Stonks page", "hash": "#plg-stonks-main"}]
+    }
+  ]
+}

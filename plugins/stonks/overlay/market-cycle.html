@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gamer Stonks cycle</title>
+  <link rel="stylesheet" href="market.css" />
+</head>
+<body>
+  <div class="tv-desk" id="desk">
+    <div class="tv-bar">
+      <span>Gamer Stonks</span>
+      <span class="tv-live" id="live">live</span>
+    </div>
+    <div class="tv-body" id="body">
+      <div class="tv-quote">
+        <div>
+          <div class="sym" id="sym">—</div>
+          <div class="name" id="name"></div>
+        </div>
+        <div style="text-align:right">
+          <div class="px" id="px">—</div>
+          <div class="tv-pill" id="chg">—</div>
+        </div>
+      </div>
+      <canvas class="tv-canvas" id="chart"></canvas>
+      <div class="tv-dots" id="dots"></div>
+    </div>
+  </div>
+  <script src="market.js"></script>
+  <script>
+    const M = FridgeMarket;
+    const dwell = Math.max(3, Number(M.param("dwell", "8")) || 8) * 1000;
+    const points = Number(M.param("points", "180")) || 180;
+    if (M.param("solid", "") === "1") document.body.classList.add("solid");
+
+    const desk = document.getElementById("desk");
+    const live = document.getElementById("live");
+    let playlist = [];
+    let idx = 0;
+    let quotes = {};
+
+    function dots() {
+      const el = document.getElementById("dots");
+      el.innerHTML = playlist.map((_, i) =>
+        "<span" + (i === idx ? ' class="on"' : "") + "></span>"
+      ).join("");
+    }
+
+    async function show(i) {
+      if (!playlist.length) return;
+      idx = ((i % playlist.length) + playlist.length) % playlist.length;
+      const it = playlist[idx];
+      const d = M.dir(it.pct);
+      desk.classList.remove("up", "down", "flat", "fade");
+      desk.classList.add("fade", d);
+      await new Promise((r) => setTimeout(r, 160));
+      document.getElementById("sym").textContent = it.symbol;
+      document.getElementById("name").textContent = it.name || it.book || "";
+      document.getElementById("px").textContent = M.fmtPx(it.price);
+      document.getElementById("chg").textContent = M.fmtChg(it.delta, it.pct);
+      dots();
+      let hist = quotes[it.symbol];
+      try { hist = await M.fetchHistory(it.symbol, points); quotes[it.symbol] = hist; }
+      catch (e) {}
+      M.drawSeries(
+        document.getElementById("chart"),
+        (hist && hist.points) || [],
+        d === "down" ? "#ff5d73" : "#3dd68c",
+        { mode: "tv", open: it.open }
+      );
+      desk.classList.remove("fade");
+    }
+
+    async function refreshList() {
+      const data = await M.fetchState();
+      live.textContent = data.preview ? "preview" : "live";
+      const list = M.filterInstruments(data.instruments || []);
+      playlist = list.length ? list : playlist;
+      if (!playlist.length) {
+        document.getElementById("name").textContent = "No listings";
+      }
+    }
+
+    async function boot() {
+      try { await refreshList(); }
+      catch (e) { live.textContent = "offline"; }
+      if (playlist.length) await show(0);
+      setInterval(refreshList, 4000);
+      setInterval(() => { if (playlist.length > 1) show(idx + 1); }, dwell);
+    }
+    boot();
+    window.addEventListener("resize", () => { if (playlist.length) show(idx); });
+  </script>
+</body>
+</html>

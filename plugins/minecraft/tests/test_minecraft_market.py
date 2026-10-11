@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -6,11 +7,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from plugins.minecraft.plugin import MinecraftIntegration, plan_chest_burns, plan_machine_rf
-from core.market import MarketTape
+from plugins.stonks.tape import MarketTape
+
+# The listings Minecraft asks Gamer Stonks for (plugin.json "market_books")
+BOOKS = [{"book": "game:minecraft", **row} for row in
+         json.loads((Path(__file__).resolve().parents[1] / "plugin.json").read_text())["market_books"]]
 
 
 def test_stock_boost_uses_listed_minecraft_ticker():
-    tape = MarketTape({})
+    tape = MarketTape({}, books=BOOKS)
     mc = MinecraftIntegration({"minecraft": {"enabled": True, "market": {"dynamo_symbols": ["NOPE"]}}})
     mc.attach_market(tape)
     boost = mc.stock_boost()
@@ -20,7 +25,7 @@ def test_stock_boost_uses_listed_minecraft_ticker():
 
 
 def test_stock_boost_follows_hot_price():
-    tape = MarketTape({})
+    tape = MarketTape({}, books=BOOKS)
     tape.apply_return("MINECRAF", 0.5, reason="test")
     mc = MinecraftIntegration({"minecraft": {"enabled": True}})
     mc.attach_market(tape)

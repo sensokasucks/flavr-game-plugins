@@ -1,8 +1,9 @@
 # FlaVR game plugins
 
 Optional games for **[FlaVR Stream Core](https://github.com/sensokasucks/flavr-leftovers)**:
-chat commands, overlays, Market listings and stream-power hooks for Minecraft, Factorio, Granvir
-and OpenTTD. Stream Core runs fine without any of them; install only the games you stream.
+chat commands, overlays, market tickers and stream-power hooks for Minecraft, Factorio, Granvir
+and OpenTTD, plus **Gamer Stonks**, the points stock market. Stream Core runs fine without any of
+them; install only what you use.
 
 | Game | Core plugin | Game side | Ports |
 |------|-------------|-----------|-------|
@@ -11,12 +12,16 @@ and OpenTTD. Stream Core runs fine without any of them; install only the games y
 | Granvir | [plugins/granvir](plugins/granvir/) (just a `plugin.json`) | [fridge-granvir-stats](fridge-granvir-stats/): BepInEx plugin, overlays, mock bridge (`START Granvir Mock.bat`) | 3855 |
 | OpenTTD | [plugins/openttd](plugins/openttd/) (Admin Port client, Chat Fund, FridgeChatFund game script) | the OpenTTD / JGRPP server itself | 3977 (Admin Port) |
 
-## Installing a game
+| Feature | Core plugin | |
+|---------|-------------|-|
+| Gamer Stonks | [plugins/stonks](plugins/stonks/) | Points stock market: tickers, `!buy` / `!sell`, dividends from game vaults, ticker overlays. Was built into Core as the Fridge Market. |
+
+## Installing a game or Gamer Stonks
 
 1. Download this repo (green **Code → Download ZIP**, or the games pack zip from **Releases**).
 2. Copy the game's folder from `plugins/` into Stream Core's `fridge-stream-core\plugins\`
    (you end up with `fridge-stream-core\plugins\minecraft\plugin.json`).
-3. Restart Stream Core. The game gets a card under **Settings → Game plugins**.
+3. Restart Stream Core. It gets a card under **Settings → Plugins**.
 4. Tick **Enabled**, **Save & apply**, restart Core again.
 5. Set up the game side (mod, bridge or server) from its folder's README.
 

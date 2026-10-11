@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gamer Stonks</title>
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <link rel="stylesheet" href="stonks.css" />
+  <script src="/admin/plugin-page.js"></script>
+</head>
+<body>
+<main>
+  <p class="tab-intro">
+    Gamer Stonks: tickers for your games, you and your chatters. Chat buys and sells with
+    <code>!buy</code>, <code>!sell</code>, <code>!tickers</code> and <code>!portfolio</code>.
+    Each game plugin with market hooks (Minecraft, Factorio ...) gets its own tab for the tickers its machines read or pay.
+  </p>
+  <div class="toolbar">
+    <button id="refresh" class="primary" type="button">Refresh</button>
+    <span id="status" class="muted" role="status"></span>
+  </div>
+
+  <div class="subtabs" id="tabs" role="tablist">
+    <button type="button" class="subtab active" data-sub="listings">Listings</button>
+    <button type="button" class="subtab" data-sub="settings">Settings</button>
+    <!-- one tab per game plugin with a "market" block goes here -->
+    <button type="button" class="subtab" data-sub="investors">Investors</button>
+    <button type="button" class="subtab" data-sub="preview">Tape preview</button>
+  </div>
+
+  <section class="sub" data-sub="listings">
+    <fieldset class="cfg-card">
+      <legend>Listings</legend>
+      <p class="hint">Add any game as a ticker. Type its Steam App ID by hand (Factorio is 427520) and the price follows its player count.</p>
+      <div class="table-wrap">
+        <table id="book">
+          <thead>
+            <tr><th>Sym</th><th>Name</th><th>Book</th><th>App ID</th><th>Players</th><th>Price</th><th>Show</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row2">
+        <label>Symbol <input id="new-sym" type="text" maxlength="8" placeholder="ER" /></label>
+        <label>Name <input id="new-name" type="text" placeholder="Elden Ring" /></label>
+      </div>
+      <div class="row2">
+        <label>Book <select id="new-book"><option value="core">core</option></select></label>
+        <label>Steam App ID <input id="new-appid" type="number" min="0" placeholder="1245620" /></label>
+      </div>
+      <div class="row2">
+        <label>Base price <input id="new-px" type="number" step="0.1" value="10" /></label>
+        <label>Feed
+          <select id="new-feed">
+            <option value="walk">walk</option>
+            <option value="steam">steam</option>
+            <option value="chatter">chatter</option>
+            <option value="manual">manual</option>
+          </select>
+        </label>
+      </div>
+      <div class="form-row" style="gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button type="button" class="primary" id="add">Add ticker</button>
+        <button type="button" id="steam-poll">Check Steam now</button>
+      </div>
+    </fieldset>
+    <fieldset class="cfg-card">
+      <legend>List a chatter</legend>
+      <p class="hint">Price = their channel points ÷ scale. The streak bonus stacks for each stream in a row they chat in.</p>
+      <div class="row2">
+        <label>User id <input id="chat-uid" type="number" min="1" placeholder="from Users &amp; points" /></label>
+        <label>Symbol <input id="chat-sym" type="text" maxlength="8" placeholder="CHATTY" /></label>
+      </div>
+      <div class="row2">
+        <label>Points ÷ <input id="chat-scale" type="number" step="1" value="10" /></label>
+        <label>Streak bonus <input id="chat-bonus" type="number" step="0.01" value="0.05" /></label>
+      </div>
+      <label class="check"><input id="chat-link" type="checkbox" checked /> Keep following their live channel points</label>
+      <div class="form-row" style="gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button type="button" class="primary" id="chat-add">List chatter</button>
+      </div>
+    </fieldset>
+  </section>
+
+  <section class="sub" data-sub="settings" hidden></section>
+
+  <section class="sub" data-sub="investors" hidden>
+    <fieldset class="cfg-card">
+      <legend>Investors + test payout</legend>
+      <p class="hint">Dividends are split by shares. Give whole shares to a user id from Users &amp; points.</p>
+      <div class="row2">
+        <label>User id <input id="hold-uid" type="number" min="1" /></label>
+        <label>Symbol <input id="hold-sym" type="text" value="FRG" /></label>
+      </div>
+      <div class="row2">
+        <label>Shares to add <input id="hold-shares" type="number" step="1" value="10" /></label>
+      </div>
+      <div class="form-row" style="gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button type="button" class="primary" id="hold-grant">Give shares</button>
+        <button type="button" id="div-test">Test 10-point dividend</button>
+      </div>
+      <pre id="holdings" class="integ-result"></pre>
+    </fieldset>
+  </section>
+
+  <section class="sub" data-sub="preview" hidden>
+    <fieldset class="cfg-card">
+      <legend>Tape preview</legend>
+      <iframe id="preview" title="Gamer Stonks ticker" style="width:100%;min-height:220px;border:0;background:transparent"></iframe>
+    </fieldset>
+  </section>
+</main>
+<script src="stonks.js"></script>
+</body>
+</html>

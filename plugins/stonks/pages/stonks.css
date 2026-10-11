@@ -1,0 +1,7 @@
+.sub[hidden] { display: none !important; }
+.sub { display: grid; gap: 14px; margin-top: 12px; }
+.table-wrap { overflow-x: auto; }
+#book { width: 100%; border-collapse: collapse; }
+#book th, #book td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border); }
+#book td.stale { color: var(--muted); font-style: italic; }
+.mc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }

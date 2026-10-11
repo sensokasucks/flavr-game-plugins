@@ -102,6 +102,8 @@ class BundledPluginTests(unittest.TestCase):
     def test_factorio_dividend_defaults(self):
         mgr = PluginManager(get_config=lambda: DEFAULTS, games={})
         mgr.load_all()
-        self.assertEqual(mgr.dividend_defaults("factorio", {"unit": "items"}, {})["symbol"], "FACT")
-        self.assertEqual(mgr.dividend_defaults("factorio", {}, {})["symbol"], "PWR")
-        self.assertEqual(mgr.dividend_defaults("granvir", {}, {}), {})
+        # Gamer Stonks reaches the hook through ctx.plugins.class_hook
+        hook = mgr.directory.class_hook("factorio", "dividend_defaults")
+        self.assertEqual(hook({"unit": "items"}, {})["symbol"], "FACT")
+        self.assertEqual(hook({}, {})["symbol"], "PWR")
+        self.assertIsNone(mgr.directory.class_hook("granvir", "dividend_defaults"))
