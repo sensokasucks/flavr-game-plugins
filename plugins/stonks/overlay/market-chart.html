@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gamer Stonks chart</title>
+  <link rel="stylesheet" href="market.css" />
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="head">
+      <h1>Gamer Stonks</h1>
+      <div class="sub" id="sub">live</div>
+    </div>
+    <div id="root"></div>
+  </div>
+  <script src="market.js"></script>
+  <script>
+    const M = FridgeMarket;
+    const layout = M.param("layout", "hero"); /* hero | grid | row */
+    const points = Number(M.param("points", "120")) || 120;
+    const root = document.getElementById("root");
+    const sub = document.getElementById("sub");
+    if (M.param("bare", "") === "1") document.body.classList.add("bare");
+    if (M.param("solid", "") === "1") document.body.classList.add("solid");
+
+    function cardHero(it, series) {
+      const d = M.dir(it.pct);
+      const color = d === "down" ? "#ff5d73" : "#3dd68c";
+      return (
+        '<div class="hero ' + d + '">' +
+          '<div class="hero-top">' +
+            '<div>' +
+              '<div class="sym">' + it.symbol + '</div>' +
+              '<div class="meta">' + M.esc(it.name || "") + " · " + M.esc(it.book || "") + '</div>' +
+            '</div>' +
+            '<div style="text-align:right">' +
+              '<div class="px">' + M.fmtPx(it.price) + '</div>' +
+              '<div class="chg">' + M.fmtChg(it.delta, it.pct) + '</div>' +
+              '<div class="meta">H ' + M.fmtPx(it.high) + ' · L ' + M.fmtPx(it.low) + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<canvas data-sym="' + it.symbol + '"></canvas>' +
+        '</div>'
+      );
+    }
+
+    function cardGrid(it) {
+      const d = M.dir(it.pct);
+      return (
+        '<div class="card ' + d + '">' +
+          '<div class="row"><span class="sym">' + it.symbol + '</span>' +
+          '<span class="chg">' + M.fmtChg(it.delta, it.pct) + '</span></div>' +
+          '<div class="name">' + M.esc(it.name || "") + '</div>' +
+          '<div class="px">' + M.fmtPx(it.price) + '</div>' +
+          '<canvas class="spark" data-sym="' + it.symbol + '"></canvas>' +
+        '</div>'
+      );
+    }
+
+    async function paint(data) {
+      const list = M.filterInstruments(data.instruments || []);
+      sub.textContent = data.preview ? "preview tape" : "live";
+      if (!list.length) {
+        root.innerHTML = '<div class="card">No listings</div>';
+        return;
+      }
+      if (layout === "hero") {
+        const it = list[0];
+        root.innerHTML = cardHero(it);
+        const hist = await M.fetchHistory(it.symbol, points);
+        M.drawSeries(
+          root.querySelector("canvas"),
+          hist.points,
+          M.dir(it.pct) === "down" ? "#ff5d73" : "#3dd68c",
+          { mode: "tv", open: it.open }
+        );
+        return;
+      }
+      root.className = layout === "row" ? "board" : "grid-charts";
+      root.innerHTML = list.map(cardGrid).join("");
+      for (const it of list) {
+        const hist = await M.fetchHistory(it.symbol, points);
+        const cv = root.querySelector('canvas[data-sym="' + it.symbol + '"]');
+        M.drawSeries(cv, hist.points);
+      }
+    }
+
+    async function poll() {
+      try { await paint(await M.fetchState()); }
+      catch (e) { root.innerHTML = '<div class="card">Chart offline — is Stream Core running?</div>'; }
+    }
+    poll();
+    setInterval(poll, 3000);
+    window.addEventListener("resize", poll);
+  </script>
+</body>
+</html>

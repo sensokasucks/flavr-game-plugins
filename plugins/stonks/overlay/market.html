@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gamer Stonks ticker</title>
+  <link rel="stylesheet" href="market.css" />
+</head>
+<body>
+  <div class="tape-wrap" id="wrap">
+    <div class="tape-brand"><b>GAMER</b> STONKS</div>
+    <div class="tape-event" id="event"></div>
+    <div class="tape-track">
+      <div class="tape-inner" id="inner"></div>
+    </div>
+  </div>
+  <script src="market.js"></script>
+  <script>
+    const M = FridgeMarket;
+    const inner = document.getElementById("inner");
+    const ev = document.getElementById("event");
+    const speed = Number(M.param("speed", "80")) || 80;
+    let measure = M.startTicker(document.querySelector(".tape-track"), inner, speed);
+
+    function item(it) {
+      const d = M.dir(it.pct);
+      const arrow = d === "up" ? "▲" : d === "down" ? "▼" : "■";
+      return (
+        '<span class="tick ' + d + '">' +
+          '<span class="sym">' + it.symbol + '</span>' +
+          '<span class="px">' + M.fmtPx(it.price) + '</span>' +
+          '<span class="chg">' + arrow + " " + M.fmtChg(it.delta, it.pct) + "</span>" +
+        "</span>"
+      );
+    }
+
+    function render(data) {
+      const list = M.filterInstruments(data.instruments || []);
+      const html = list.map(item).join("") || '<span class="tick flat">No listings</span>';
+      inner.innerHTML = html + html;
+      if (measure) measure();
+      const le = data.last_event;
+      if (le && le.symbol) {
+        ev.className = "tape-event on " + (le.pct < 0 ? "down" : "up");
+        ev.textContent = le.symbol + " " + (le.pct > 0 ? "+" : "") + le.pct + "%  " + (le.reason || "");
+      } else {
+        ev.className = "tape-event";
+        ev.textContent = "";
+      }
+    }
+
+    async function poll() {
+      try { render(await M.fetchState()); }
+      catch (e) { inner.innerHTML = '<span class="tick flat">Market tape offline</span>'; }
+    }
+    poll();
+    setInterval(poll, 2500);
+  </script>
+</body>
+</html>

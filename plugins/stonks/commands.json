@@ -1,0 +1,42 @@
+{
+  "buy": {
+    "aliases": ["long"],
+    "permission": "public",
+    "description": "Spend points to buy shares. !buy SYMBOL 50",
+    "args": ["symbol", "points"],
+    "handler": "core",
+    "special": "market_buy",
+    "cost": 0,
+    "examples": ["!buy FRG 50"]
+  },
+  "sell": {
+    "aliases": ["short"],
+    "permission": "public",
+    "description": "Sell shares back for points. !sell SYMBOL 2 or !sell SYMBOL all",
+    "args": ["symbol", "qty"],
+    "handler": "core",
+    "special": "market_sell",
+    "cost": 0,
+    "examples": ["!sell FRG 2", "!sell FRG all"]
+  },
+  "tickers": {
+    "aliases": ["stocks", "market"],
+    "permission": "public",
+    "description": "List live Gamer Stonks tickers",
+    "args": [],
+    "handler": "core",
+    "special": "market_tickers",
+    "cost": 0,
+    "examples": ["!tickers"]
+  },
+  "portfolio": {
+    "aliases": ["shares", "holdings"],
+    "permission": "public",
+    "description": "Show your Gamer Stonks holdings",
+    "args": [],
+    "handler": "core",
+    "special": "market_portfolio",
+    "cost": 0,
+    "examples": ["!portfolio"]
+  }
+}

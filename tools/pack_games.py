@@ -2,7 +2,7 @@
 Build the games pack: StreamCore-games-pack-<version>.zip with every game plugin folder in this repo.
 
 Unzip it into Stream Core's fridge-stream-core/ folder (it holds plugins/<id>/...), restart Core, and the games show
-under Settings -> Game plugins. Only files git tracks go in (no __pycache__, data or local
+under Settings -> Plugins. Only files git tracks go in (no __pycache__, data or local
 edits that were never committed); tests stay out.
 
     python tools/pack_games.py                 version = today (YYYY.MM.DD)

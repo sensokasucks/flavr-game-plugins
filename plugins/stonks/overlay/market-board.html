@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gamer Stonks board</title>
+  <link rel="stylesheet" href="market.css" />
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="head">
+      <h1>Gamer Stonks</h1>
+      <div class="sub" id="sub">live book</div>
+    </div>
+    <div class="board" id="board"></div>
+  </div>
+  <script src="market.js"></script>
+  <script>
+    const M = FridgeMarket;
+    const board = document.getElementById("board");
+    const sub = document.getElementById("sub");
+    if (M.param("bare", "") === "1") document.body.classList.add("bare");
+    if (M.param("solid", "") === "1") document.body.classList.add("solid");
+
+    async function paint(data) {
+      const list = M.filterInstruments(data.instruments || []);
+      sub.textContent = (data.preview ? "preview · " : "") + list.length + " listings";
+      board.innerHTML = list.map((it) => {
+        const d = M.dir(it.pct);
+        return (
+          '<div class="card ' + d + '">' +
+            '<div class="row"><span class="sym">' + it.symbol + '</span>' +
+            '<span class="chg">' + M.fmtChg(it.delta, it.pct) + '</span></div>' +
+            '<div class="name">' + M.esc(it.name || it.book || "") + '</div>' +
+            '<div class="px">' + M.fmtPx(it.price) + '</div>' +
+            '<canvas class="spark" data-sym="' + it.symbol + '"></canvas>' +
+          '</div>'
+        );
+      }).join("") || '<div class="card">No listings</div>';
+      for (const it of list) {
+        try {
+          const hist = await M.fetchHistory(it.symbol, 90);
+          M.drawSeries(board.querySelector('canvas[data-sym="' + it.symbol + '"]'), hist.points);
+        } catch (e) {}
+      }
+    }
+
+    async function poll() {
+      try { await paint(await M.fetchState()); }
+      catch (e) { board.innerHTML = '<div class="card">Board offline</div>'; }
+    }
+    poll();
+    setInterval(poll, 3000);
+  </script>
+</body>
+</html>
