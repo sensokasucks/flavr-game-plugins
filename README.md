@@ -43,3 +43,9 @@ Its settings stay in `config.yaml` in case you put it back.
   unzips straight into `fridge-stream-core`).
 
 These folders moved here from flavr-leftovers on 2026-10-09 with their git history.
+
+## License
+
+Copyright (C) 2026 Sensoka (sensokasucks).
+
+This project is free software under the [GNU General Public License v3.0](LICENSE) (GPL-3.0). You can use it for free, including on monetized streams and other commercial use, change it, and share it. If you pass it on to anyone, changed or not, free or paid, you must give them the full source code under the same GPL-3.0 terms.
