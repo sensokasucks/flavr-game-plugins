@@ -8,6 +8,10 @@ That process owns RCON + Wiretap + overlay files; Core:
   - POSTs /api/metrics (power_level 0–15) so Chat Dynamos in-game generate electricity
 
 Enable with factorio.enabled=true and keep the Node bridge running (fridge-factorio-stats/).
+
+Settings live under ``factorio:`` in Core's config.yaml; defaults and the Gamer Stonks
+fields are in plugin.json (keep the ``market.*`` keys read below in sync with it).
+Loaded by Core's plugin manager from plugin.json ("entry": "plugin:FactorioIntegration").
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from core.plugin_api import BasePlugin
 
 log = logging.getLogger("plugins.factorio")
 
+# (title, file on the bridge, notes) for each overlay page fridge-factorio-stats serves on :3847.
 OVERLAY_PAGES = (
     ("Full stats overlay", "overlay.html", "Power, research, kills, deaths, evolution, alerts"),
     ("Power", "power.html", "Production / consumption"),
@@ -36,6 +41,8 @@ OVERLAY_PAGES = (
 
 
 class FactorioIntegration(BasePlugin):
+    """Core side of Factorio: pushes stream metrics to the bridge and reports its health."""
+
     name = "factorio"
 
     def __init__(self, config: dict, ctx=None):
@@ -49,6 +56,7 @@ class FactorioIntegration(BasePlugin):
         self._market = None
 
     def overlay_catalog(self) -> list[dict]:
+        """Overlay URLs for Admin -> Integrations / Sources (bridge pages + Core's market tape)."""
         base = self.bridge_url
         pages = [
             {"name": title, "url": urljoin(base + "/", path), "notes": notes}
@@ -77,6 +85,7 @@ class FactorioIntegration(BasePlugin):
             self._client = None
 
     async def execute(self, req: ExecuteRequest) -> dict:
+        """Chat commands are not sent into Factorio; the command group only marks the game as running."""
         if not self.enabled:
             return {"success": False, "error": "factorio integration disabled"}
         return {
@@ -86,15 +95,22 @@ class FactorioIntegration(BasePlugin):
         }
 
     def attach_market(self, tape) -> None:
+        """Give the plugin the Gamer Stonks tape (MarketTape). The tests call this.
+
+        Note: current Stream Core does not call attach_market (the market is now
+        ctx.service("market")), so in a live Core ``_market`` stays None.
+        """
         self._market = tape
 
     def _market_cfg(self) -> dict:
+        """A copy of ``factorio.market`` from the live config."""
         live = getattr(self, "config", None) or self.config
         fx = (live or {}).get("factorio") or {}
         return dict(fx.get("market") or {})
 
     @staticmethod
     def _symbols(raw) -> list[str]:
+        """"A, b" or ["a", "B"] -> ["A", "B"] (uppercased, blanks dropped)."""
         if raw is None:
             return []
         if isinstance(raw, str):
@@ -102,6 +118,7 @@ class FactorioIntegration(BasePlugin):
         return [str(s).strip().upper() for s in raw if str(s).strip()]
 
     def _boost(self) -> dict:
+        """Price factor of the dynamo tickers, clamped to dynamo_min/max_factor (1.0 without a market)."""
         cfg = self._market_cfg()
         symbols = self._symbols(cfg.get("dynamo_symbols") or ["FACTORIO"])
         tape = self._market
@@ -114,6 +131,13 @@ class FactorioIntegration(BasePlugin):
         )
 
     async def on_metrics(self, snap: MetricsSnapshot) -> None:
+        """Called by Core every 2 s: send the metrics + market settings to the bridge.
+
+        The bridge passes powerLevel (0-15) and pwrFactor to the Chat Dynamo over RCON,
+        and uses the vault / chest settings for its dividend flushes to Core.
+        With ``market.power_drain`` on, each push also lowers the dynamo tickers by
+        power_drain_bps basis points (1 bp = 0.01 %) scaled by power_level / 15.
+        """
         if not self.enabled or not self._client:
             return
         cfg = self._market_cfg()
@@ -127,6 +151,7 @@ class FactorioIntegration(BasePlugin):
                     "commands": snap.command_rate,
                     "powerLevel": snap.power_level,
                     "pwrFactor": boost.get("factor", 1.0),
+                    # stock_factor rows are dicts; keep only the symbol names.
                     "pwrSymbols": [s.get("symbol") if isinstance(s, dict) else s for s in (boost.get("symbols") or [])],
                     "vaultSymbols": self._symbols(cfg.get("vault_symbol") or "FACTORIO"),
                     "chestSymbols": self._symbols(cfg.get("chest_symbol") or "FACTORIO"),
@@ -135,6 +160,7 @@ class FactorioIntegration(BasePlugin):
                 },
             )
         except Exception:
+            # Bridge not running: ignore, this runs every 2 s.
             pass
         if cfg.get("power_drain") and self._market and snap.power_level:
             bps = float(cfg.get("power_drain_bps") or 0)
@@ -143,6 +169,7 @@ class FactorioIntegration(BasePlugin):
                 self._market.apply_return(sym, frac, reason="power_drain")
 
     def market_status(self) -> list[str]:
+        """Line shown on the plugin's Gamer Stonks tab."""
         boost = self._boost()
         bits = " · ".join(
             f"{row.get('symbol')} {float(row.get('factor') or 0):.2f}×" for row in boost.get("symbols") or []
@@ -158,6 +185,7 @@ class FactorioIntegration(BasePlugin):
         return {"symbol": symbol, **({"rates": rates} if rates else {})}
 
     async def fetch_stats(self) -> dict:
+        """GET the bridge's /stats JSON (kept in ``last_stats``); {} when unreachable."""
         if not self._client:
             return {}
         try:
@@ -172,6 +200,7 @@ class FactorioIntegration(BasePlugin):
         return {}
 
     async def health(self) -> bool:
+        """True when the bridge answers GET /stats with HTTP 200 (shown on Admin -> Status)."""
         if not self.enabled or not self._client:
             return False
         try:

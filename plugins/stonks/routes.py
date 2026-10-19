@@ -19,12 +19,15 @@ OFF = "Gamer Stonks is off (Settings → Plugins)"
 
 
 def add_routes(router, get_running) -> None:
+    # The running plugin instance, or HTTP 503 while Gamer Stonks is off.
+    """Register the routes on Core's router; get_running() is the live GamerStonks or None."""
     def running():
         inst = get_running()
         if inst is None or inst.tape is None:
             raise HTTPException(503, OFF)
         return inst
 
+    # Same, plus Core's admin token check (X-Admin-Token header from the dashboard).
     def admin(token: Optional[str]):
         inst = running()
         inst.ctx.require_admin(token)
@@ -39,6 +42,7 @@ def add_routes(router, get_running) -> None:
 
     @router.get("/api/market/history")
     async def market_history(symbol: str = "FRG", points: int = 120):
+        # points is clamped to 8..2000 samples.
         return running().tape.history(symbol, points=max(8, min(int(points or 120), 2000)))
 
     # -------------------------------------------------------------- games
@@ -80,6 +84,7 @@ def add_routes(router, get_running) -> None:
             "last_event": tape.last_event,
         }
 
+    # Grant (or with negative shares, take) shares by hand: {user_id, symbol, shares}.
     @router.post("/api/admin/market/holding")
     async def market_grant_holding(body: Dict[str, Any] = Body(default={}), x_admin_token: Optional[str] = Header(None)):
         inst = admin(x_admin_token)
@@ -91,6 +96,7 @@ def add_routes(router, get_running) -> None:
         nxt = await inst.holdings.adjust(uid, symbol, milli)
         return {"ok": True, "user_id": uid, "symbol": symbol, "milli_shares": nxt}
 
+    # Test button: pay {points} to {symbol}'s holders without a game.
     @router.post("/api/admin/market/dividend")
     async def market_test_dividend(body: Dict[str, Any] = Body(default={}), x_admin_token: Optional[str] = Header(None)):
         inst = admin(x_admin_token)
@@ -104,6 +110,7 @@ def add_routes(router, get_running) -> None:
                               "holders": paid.get("holders"), "burned": paid.get("burned")}
         return {"ok": True, "payout": paid}
 
+    # List a new ticker. A chatter ticker starts at the chatter's points / chatter_points_scale.
     @router.post("/api/admin/market/tickers")
     async def market_create_ticker(body: Dict[str, Any] = Body(default={}), x_admin_token: Optional[str] = Header(None)):
         inst = admin(x_admin_token)
@@ -138,6 +145,7 @@ def add_routes(router, get_running) -> None:
                 tape.save_listings()
         return {"ok": True, "ticker": row}
 
+    # Edit a ticker; fields left out (or null) keep their value. "price" sets the live price.
     @router.patch("/api/admin/market/tickers/{symbol}")
     async def market_edit_ticker(symbol: str, body: Dict[str, Any] = Body(default={}),
                                  x_admin_token: Optional[str] = Header(None)):
@@ -172,6 +180,7 @@ def add_routes(router, get_running) -> None:
                 pass
         return {"ok": True, "ticker": row}
 
+    # Delisting keeps the row with status "delisted" (hidden from overlays and trading).
     @router.delete("/api/admin/market/tickers/{symbol}")
     async def market_delist_ticker(symbol: str, x_admin_token: Optional[str] = Header(None)):
         if not admin(x_admin_token).tape.delist(symbol):
@@ -182,6 +191,7 @@ def add_routes(router, get_running) -> None:
     async def market_steam_poll(x_admin_token: Optional[str] = Header(None)):
         return await admin(x_admin_token).tape.poll_steam()
 
+    # Make the latest Steam player count the new 1.0x baseline for that ticker.
     @router.post("/api/admin/market/steam/baseline")
     async def market_steam_baseline(body: Dict[str, Any] = Body(default={}), x_admin_token: Optional[str] = Header(None)):
         tape = admin(x_admin_token).tape

@@ -4,6 +4,17 @@ Minecraft plugin.
 Talks to the Fabric client-mod (stats) and server-mod
 (command execution + Chat Dynamo + dividend vaults) over HTTP.
 Mods: fridge-minecraft/ (Fabric + NeoForge).
+
+Ports: client mod 3852 (player stats, inventory flash), server mod 3853
+(commands, metrics, Fridge blocks, vaults). Settings live under ``minecraft:`` in
+Core's config.yaml; defaults and the Gamer Stonks fields are in plugin.json, chat
+commands in commands.json. Every call sends ``X-Fridge-Core: 1`` (the mods refuse
+calls without it).
+
+Each metrics tick (every 2 s, on_metrics) does, in order: push metrics + market
+settings to the server mod, dip the tickers if the player died, drive the placed
+Fridge blocks (Chat Dynamo / Kinetic / Dividend Chest), then pay out full vaults
+as Gamer Stonks dividends.
 """
 
 from __future__ import annotations
@@ -20,6 +31,7 @@ log = logging.getLogger("plugins.minecraft")
 
 
 def _mc_market_cfg(config: dict) -> dict:
+    """Market settings for Minecraft: top-level ``market:`` with ``minecraft.market:`` on top."""
     mc = (config.get("minecraft") or {}).get("market") or {}
     mkt = config.get("market") or {}
     # nested minecraft.market wins; top-level market supplies caps
@@ -36,6 +48,8 @@ def plan_machine_rf(
     max_rf: float = 2400,
 ) -> int:
     """FE/t Core authorizes. Zero if the tape is under the off threshold."""
+    # drain_rate is the block's 0..15 setting (sneak-click in game). Output scales
+    # linearly with it and with the ticker factor (clamped lo..hi), up to max_rf FE/tick.
     rate = max(0, min(15, int(drain_rate or 0)))
     if rate <= 0 or float(factor) < float(off_below):
         return 0
@@ -52,6 +66,9 @@ def plan_chest_burns(
     max_count: int = 64,
 ) -> tuple[list[dict], float]:
     """Pick items Core should delete this pulse. drain_rate 0 = storage only."""
+    # At most max_count * drain_rate / 15 items per pulse, taken in slot order. Items
+    # worth 0 (no value in ``values`` and default 0) are left alone.
+    # Returns ([{slot, count}, ...] to delete, total value of those items).
     rate = max(0, min(15, int(drain_rate or 0)))
     if rate <= 0:
         return [], 0.0
@@ -78,6 +95,9 @@ def plan_chest_burns(
 
 
 class MinecraftIntegration(BasePlugin):
+    """Core side of Minecraft: forwards chat commands to the server mod, drives
+    the Fridge blocks from stream metrics + ticker prices, and pays vault dividends."""
+
     name = "minecraft"
 
     def __init__(self, config: dict, ctx=None):
@@ -96,15 +116,23 @@ class MinecraftIntegration(BasePlugin):
         self._last_deaths: int | None = None
 
     def attach_market(self, tape) -> None:
+        """Give the plugin the Gamer Stonks tape (MarketTape). The tests call this.
+
+        Note: current Stream Core does not call attach_market (the market is now
+        ctx.service("market")), so in a live Core ``_market`` stays None.
+        """
         self._market = tape
 
     def attach_store(self, store) -> None:
+        """Core's points store (core.store.Store); Core's plugin manager calls this."""
         self._store = store
 
     def _cfg(self) -> dict:
         return _mc_market_cfg(self.config)
 
     def _symbol_list(self, extra: list | None = None) -> list[str]:
+        """Tickers the dynamo follows: the configured ones that are listed, else
+        MINECRAF / STEVE and the rest of the minecraft book."""
         cfg = self._cfg()
         raw = extra if extra is not None else cfg.get("dynamo_symbols")
         if isinstance(raw, str):
@@ -129,6 +157,7 @@ class MinecraftIntegration(BasePlugin):
         return names or ["MINECRAF"]
 
     def stock_boost(self) -> dict:
+        """{factor, raw, symbols} from the tape's stock_factor; factor 1.0 without a market."""
         cfg = self._cfg()
         tape = self._market
         if tape is None:
@@ -157,6 +186,8 @@ class MinecraftIntegration(BasePlugin):
             self._client = None
 
     async def execute(self, req: ExecuteRequest) -> dict:
+        """Run one chat command: show_inventory goes to the client mod, everything else
+        is a game command (``req.template``) for the server mod's /api/execute."""
         if not self.enabled or not self._client:
             return {"success": False, "error": "minecraft integration disabled"}
 
@@ -193,6 +224,7 @@ class MinecraftIntegration(BasePlugin):
             return {"success": False, "error": str(e)}
 
     async def on_metrics(self, snap: MetricsSnapshot) -> None:
+        """Every 2 s from Core: see the module docstring for the steps."""
         if not self.enabled or not self._client:
             return
         boost = self.stock_boost()
@@ -208,6 +240,7 @@ class MinecraftIntegration(BasePlugin):
                     "stockFactor": boost.get("factor", 1.0),
                     "chestDefaultValue": float(cfg.get("chest_default_value", 0.05) or 0.05),
                     "chestUseSmeltXp": bool(cfg.get("chest_use_smelt_xp", True)),
+                    # The mod expects "item:value,item:value" strings, not JSON lists.
                     "chestValues": ",".join(
                         f"{k}:{v}" for k, v in dict(cfg.get("chest_item_values") or {}).items()
                     ),
@@ -294,6 +327,9 @@ class MinecraftIntegration(BasePlugin):
                 )
             except Exception:
                 log.warning("minecraft device control failed", exc_info=True)
+        # Running machines cost the tickers: power_drain_bps basis points (default 80;
+        # 1 bp = 0.01 %) per full-drain machine, at most 3 machines' worth per tick.
+        # On unless market.power_drain is set to false.
         if drain_units and cfg.get("power_drain") is not False and self._market:
             if factor >= off_below:
                 bps = float(cfg.get("power_drain_bps") or 80)
@@ -319,6 +355,8 @@ class MinecraftIntegration(BasePlugin):
                     )
 
     async def _apply_deaths(self) -> None:
+        """When the client mod's death counter goes up, dip the Minecraft tickers
+        by death_return (default -8 %), with a per-symbol cooldown."""
         stats = await self.fetch_client_stats()
         if not stats:
             return
@@ -351,6 +389,13 @@ class MinecraftIntegration(BasePlugin):
             log.info("MC death dip %s %s%% (deaths %s→%s)", sym, round(frac * 100, 2), prev, deaths)
 
     async def _flush_vaults(self) -> None:
+        """Pay out the server mod's pending vault work.
+
+        Dividend Vault: pendingRf / vault_rf_per_point points once vault_min_rf is reached.
+        Dividend Chest: pendingXp * chest_points_per_xp points once chest_min_xp is reached.
+        Both capped at hourly_cap_points per flush. Only the work actually paid is
+        acknowledged back (POST /api/market/ack), so the remainder stays pending.
+        """
         if not self._client:
             return
         try:
@@ -418,6 +463,10 @@ class MinecraftIntegration(BasePlugin):
                 pass
 
     async def _pay(self, *, symbol: str, work: float, unit: str, points: int, reason: str) -> dict:
+        """Pay ``points`` to the holders of ``symbol`` and bump its price by dividend_price_bump.
+
+        Lists the symbol in the minecraft book first if the tape does not have it.
+        """
         tape = self._market
         store = self._store
         symbol = str(symbol or "MINECRAF").upper()
@@ -454,6 +503,7 @@ class MinecraftIntegration(BasePlugin):
         return paid
 
     def overlay_catalog(self) -> list[dict]:
+        """Overlay pages on Core (:3850) for Admin -> Integrations; the market pages live in overlay/ here."""
         base = (self.ctx.core_url() if self.ctx else "http://127.0.0.1:3850") + "/overlay"
         return [
             {"name": "Minecraft / metrics overlay", "url": f"{base}/overlay.html", "notes": "HP, CPM, power level, inventory flash"},
@@ -465,6 +515,7 @@ class MinecraftIntegration(BasePlugin):
         return {"detail": f"player {self.player}", "player_name": self.player}
 
     def market_status(self) -> list[str]:
+        """Lines on the plugin's Gamer Stonks tab: boost, vault / chest totals, each placed block."""
         boost = self.stock_boost()
         bits = " · ".join(
             f"{row.get('symbol')} {float(row.get('factor') or 0):.2f}×" for row in boost.get("symbols") or []
@@ -503,6 +554,7 @@ class MinecraftIntegration(BasePlugin):
             return {}
 
     async def fetch_client_stats(self) -> dict:
+        """Player stats from the client mod's /api/stats; {} when it is not running."""
         if not self._client:
             return {}
         try:
@@ -514,6 +566,7 @@ class MinecraftIntegration(BasePlugin):
         return {}
 
     async def health(self) -> bool:
+        """True when the server mod answers /api/health (any status below 500)."""
         if not self.enabled or not self._client:
             return False
         try:

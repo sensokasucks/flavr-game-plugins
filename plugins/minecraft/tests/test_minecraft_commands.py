@@ -1,10 +1,14 @@
-"""The default public Minecraft commands only pass listed ids into the game command."""
+"""The default public Minecraft commands only pass listed ids into the game command.
+
+Guards commands.json: chat must not be able to give TNT / command blocks, spawn
+bosses or inject item NBT through {arg1}.
+"""
 
 import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]       # fridge-stream-core/
+ROOT = Path(__file__).resolve().parents[3]       # this repo's root (conftest.py adds Stream Core)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -18,6 +22,7 @@ COMMANDS = Path(__file__).resolve().parents[1] / "commands.json"
 
 
 def _router(tmp_path):
+    """A CommandRouter loaded with a copy of this plugin's commands.json, minecraft group on."""
     path = tmp_path / "commands.json"
     path.write_text(COMMANDS.read_text(encoding="utf-8"), encoding="utf-8")
     r = CommandRouter(path, PermissionManager({"permissions": {"admin": [], "mod": []}}), default_player="Steve")

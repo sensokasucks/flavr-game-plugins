@@ -10,6 +10,15 @@
  *   2. Install the fridge-factorio-stats mod (and optionally Wiretap)
  *   3. npm install && npm start
  *   4. In XSplit add Webpage source → http://localhost:3847/overlay.html
+ *
+ * Stream Core's Factorio plugin (plugins/factorio/plugin.py) talks to this bridge:
+ *   - GET  /stats         health check + stats (Core's Status page)
+ *   - POST /api/metrics   every 2 s: powerLevel 0-15, pwrFactor, vault/chest settings.
+ *                         The bridge forwards power to the game over RCON
+ *                         (/fridge-power, /fridge-pwr-factor) for the Chat Dynamo.
+ * The bridge in turn POSTs vault flushes to Core's /api/market/dividend (Gamer Stonks).
+ * Settings come from env vars (see CONFIG); port 3847 is fixed by the docs and Core's
+ * factorio.bridge_url default.
  */
 
 const express = require('express');
@@ -32,6 +41,7 @@ const CONFIG = {
   bindHost: process.env.BIND_HOST || '127.0.0.1',
 
   coreUrl: (process.env.CORE_URL || 'http://127.0.0.1:3850').replace(/\/$/, ''),
+  // Fallback flush thresholds (MJ of power, item count); Core's metrics push overrides them.
   vaultFlushMj: parseFloat(process.env.VAULT_FLUSH_MJ || '25'),
   vaultFlushItems: parseInt(process.env.VAULT_FLUSH_ITEMS || '20', 10),
 
@@ -53,6 +63,8 @@ const CONFIG = {
 };
 
 // ============== STATE ==============
+// Everything the overlays get: one merged object, sent whole on every update.
+// `stream` holds the last values Core pushed; `vaults` the pending Power / Item Vault work.
 let latestStats = {
   tick: 0,
   deaths: 0,
@@ -73,6 +85,7 @@ let latestStats = {
   lastUpdate: null
 };
 
+// RCON link state and the last values pushed to the game (to avoid resending every 2 s).
 let rcon = null;
 let rconConnected = false;
 let lastPushedPowerLevel = null;
@@ -81,6 +94,7 @@ let lastPushedFactor = null;
 let lastVaultFlushAt = 0;
 
 // ============== RCON ==============
+// Connect to Factorio's RCON; retries every 5 s until the game is up.
 async function connectRcon() {
   try {
     rcon = await Rcon.connect({
@@ -103,6 +117,7 @@ async function connectRcon() {
   }
 }
 
+// Ask the mod for its stats JSON. /xsplit-stats is the mod's old command name.
 async function pollRcon() {
   if (!rconConnected || !rcon) return;
   try {
@@ -130,6 +145,7 @@ async function pollRcon() {
 }
 
 // ============== FILE WATCHERS ==============
+// Read Wiretap's stats.json (hmph-wiretap mod) for exact power, research and evolution.
 function mergeWiretap(filePath) {
   try {
     if (!fs.existsSync(filePath)) return;
@@ -186,6 +202,7 @@ function mergeWiretap(filePath) {
   }
 }
 
+// Read the stats file our own mod writes to script-output/fridge-stats (fallback source).
 function mergeModFile(filePath) {
   try {
     if (!fs.existsSync(filePath)) return;
@@ -197,6 +214,7 @@ function mergeModFile(filePath) {
   }
 }
 
+// Merge one update into latestStats and push the whole object to every overlay.
 function mergeStats(incoming, source) {
   // Prefer Wiretap for power & research when available
   if (incoming.power && (source === 'wiretap' || !latestStats.power.production_watts)) {
@@ -237,6 +255,7 @@ const wss = new WebSocket.Server({
   verifyClient: (info) => !info.origin || LOOPBACK_ORIGIN.test(info.origin),
 });
 
+// Host header without the port ("[::1]" kept in brackets).
 function hostName(req) {
   const h = String(req.headers.host || '').toLowerCase();
   if (h.startsWith('[')) return h.slice(0, h.indexOf(']') + 1);
@@ -260,12 +279,15 @@ app.use(express.json());
 const overlayDir = path.join(__dirname, '..', 'overlay');
 app.use(express.static(overlayDir));
 
+// Power level is an integer 0..15 (same scale as Core's power_level).
 function clampLevel(n) {
   const v = Number(n);
   if (!Number.isFinite(v)) return 0;
   return Math.max(0, Math.min(15, Math.round(v)));
 }
 
+// Send the power level to the Chat Dynamo when it changes (or every 4 s as a keep-alive),
+// and the stock factor (clamped 0.25..3) when it moves by more than 0.02.
 async function pushPowerToGame(level, pwrFactor) {
   const now = Date.now();
   if (!rconConnected || !rcon) return;
@@ -291,6 +313,8 @@ async function pushPowerToGame(level, pwrFactor) {
   }
 }
 
+// Tell Core a vault flushed: `work` MJ (unit "mj") or items (unit "items") for one ticker.
+// Sends X-Fridge-Core so Core accepts it as a game bridge call.
 async function postDividend(symbol, work, unit) {
   if (!(work > 0)) return;
   const url = CONFIG.coreUrl + '/api/market/dividend';
@@ -314,6 +338,8 @@ async function postDividend(symbol, work, unit) {
   }
 }
 
+// At most every 15 s: when the pending vault work passes a threshold, empty the in-game
+// vaults over RCON and split the work evenly across the configured tickers.
 async function flushVaultsIfReady() {
   const now = Date.now();
   if (now - lastVaultFlushAt < 15000) return;
@@ -355,6 +381,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Read-only view of what Core last pushed (debugging).
 app.get('/api/metrics', (req, res) => {
   res.json({
     ok: true,
@@ -363,6 +390,7 @@ app.get('/api/metrics', (req, res) => {
   });
 });
 
+// Core's metrics push (see the header). Accepts camelCase and snake_case keys.
 app.post('/api/metrics', requireCore, async (req, res) => {
   const body = req.body || {};
   const level = clampLevel(body.powerLevel ?? body.power_level);
@@ -405,6 +433,7 @@ wss.on('connection', (ws) => {
 });
 
 // ============== START ==============
+// Connect RCON, start the poll / flush timers and file watchers, then listen.
 async function start() {
   console.log('=== Fridge Factorio Stats Bridge ===');
   console.log(`HTTP/WS listening on http://${CONFIG.bindHost}:${CONFIG.port}`);

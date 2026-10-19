@@ -9,6 +9,11 @@ Speaks the documented admin protocol enough to:
 
 Does not require pyOpenTTDAdmin. Compatible with vanilla and JGRPP.
 Default port: 3977.
+
+Used by plugin.py (OpenTTDIntegration). Every packet is: uint16 total size
+(little-endian, includes this 3-byte header), uint8 packet type, payload.
+Strings are UTF-8 ending in a zero byte. The packet type numbers below must
+match OpenTTD's admin protocol (src/network/core/tcp_admin.h in OpenTTD).
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from typing import Callable, Optional
 
 log = logging.getLogger("plugins.openttd.admin")
 
+# Packet type ids. Only the ones this client sends or reads are listed.
 # Client → server
 ADMIN_JOIN = 0
 ADMIN_QUIT = 1
@@ -56,6 +62,7 @@ SERVER_CONSOLE = 121
 SERVER_GAMESCRIPT = 124
 SERVER_RCON_END = 125
 
+# Update kinds for ADMIN_UPDATE_FREQUENCY / ADMIN_POLL.
 UPDATE_DATE = 0
 UPDATE_CLIENT_INFO = 1
 UPDATE_COMPANY_INFO = 2
@@ -63,6 +70,7 @@ UPDATE_COMPANY_ECONOMY = 3
 UPDATE_COMPANY_STATS = 4
 UPDATE_CHAT = 5
 
+# How often the server should send each update kind (bit flags).
 FREQ_POLL = 0x01
 FREQ_DAILY = 0x02
 FREQ_WEEKLY = 0x04
@@ -71,10 +79,12 @@ FREQ_AUTOMATIC = 0x40
 
 
 def _pack_str(s: str) -> bytes:
+    """Encode a protocol string (UTF-8 + terminating zero byte)."""
     return (s or "").encode("utf-8", errors="replace") + b"\x00"
 
 
 def _read_str(buf: bytes, offset: int) -> tuple[str, int]:
+    """Read a zero-terminated string at ``offset``; returns (text, offset after it)."""
     end = buf.find(b"\x00", offset)
     if end < 0:
         return buf[offset:].decode("utf-8", errors="replace"), len(buf)
@@ -82,11 +92,18 @@ def _read_str(buf: bytes, offset: int) -> tuple[str, int]:
 
 
 def _build(ptype: int, payload: bytes) -> bytes:
+    """Frame a packet: size (header included) + type + payload."""
     size = 3 + len(payload)
     return struct.pack("<HB", size, ptype) + payload
 
 
 class AdminClient:
+    """One Admin Port connection. ``on_update(kind, data)`` is called for every parsed
+    update: welcome, date, company, economy, stats, company_remove, shutdown, newgame.
+
+    ``companies`` maps company id -> dict (name, money, loan, income, value, vehicles ...).
+    """
+
     def __init__(
         self,
         host: str = "127.0.0.1",
@@ -112,6 +129,7 @@ class AdminClient:
         self._lock = asyncio.Lock()
 
     def snapshot(self) -> dict:
+        """Plain-dict state for the overlay / dashboard (date, companies sorted by id)."""
         return {
             "connected": self.connected,
             "host": self.host,
@@ -123,6 +141,7 @@ class AdminClient:
         }
 
     async def start(self) -> None:
+        """Log in, subscribe to updates, then keep reading packets in a background task."""
         await self._connect()
         self._task = asyncio.create_task(self._read_loop(), name="openttd-admin-read")
 
@@ -150,6 +169,10 @@ class AdminClient:
         self.reader = None
 
     async def _connect(self) -> None:
+        """Open the socket and send ADMIN_JOIN (password, our name, version "1").
+
+        Raises if no SERVER_WELCOME arrives (usually a wrong admin password or port).
+        """
         self.reader, self.writer = await asyncio.wait_for(
             asyncio.open_connection(self.host, self.port),
             timeout=5.0,
@@ -172,6 +195,7 @@ class AdminClient:
         log.info("OpenTTD Admin Port connected %s:%s map=%s", self.host, self.port, self.welcome.get("map"))
 
     async def _subscribe(self) -> None:
+        """Ask for daily dates and weekly economy / stats, and poll everything once now."""
         async def sub(kind: int, freq: int) -> None:
             self.writer.write(_build(ADMIN_UPDATE_FREQUENCY, struct.pack("<HH", kind, freq)))
             await self.writer.drain()
@@ -185,12 +209,18 @@ class AdminClient:
         await self.poll(UPDATE_COMPANY_ECONOMY, 0xFFFFFFFF)
 
     async def poll(self, kind: int, extra: int = 0xFFFFFFFF) -> None:
+        """Ask for one update now. ``extra`` 0xFFFFFFFF means "all companies"."""
         if not self.writer:
             return
         self.writer.write(_build(ADMIN_POLL, struct.pack("<BI", kind, extra & 0xFFFFFFFF)))
         await self.writer.drain()
 
     async def rcon(self, command: str, timeout: float = 4.0) -> str:
+        """Run a server console command and return its output lines joined by newlines.
+
+        One command at a time (lock); output is collected until SERVER_RCON_END or the
+        timeout (then whatever arrived so far is returned).
+        """
         if not self.writer or not self.connected:
             raise RuntimeError("Admin Port not connected")
         async with self._lock:
@@ -209,6 +239,7 @@ class AdminClient:
             return "\n".join(self._rcon_buf)
 
     async def say(self, message: str) -> None:
+        """Post a message in OpenTTD's in-game chat (double quotes become single, max 400 chars)."""
         msg = (message or "").replace('"', "'")[:400]
         try:
             await self.rcon(f'say "{msg}"')
@@ -216,6 +247,7 @@ class AdminClient:
             log.warning("openttd say failed: %s", exc)
 
     async def send_gamescript(self, payload: dict) -> None:
+        """Send a JSON object to the running Game Script (FridgeChatFund reads these)."""
         if not self.writer or not self.connected:
             raise RuntimeError("Admin Port not connected")
         blob = json.dumps(payload, separators=(",", ":"))
@@ -246,6 +278,7 @@ class AdminClient:
         return ptype, payload
 
     def _dispatch(self, ptype: int, payload: bytes) -> None:
+        """Parse one server packet into state and fire on_update. Unknown types are ignored."""
         if ptype == SERVER_WELCOME:
             name, off = _read_str(payload, 0)
             version, off = _read_str(payload, off)
@@ -316,6 +349,7 @@ class AdminClient:
         self._emit("company", rec)
 
     def _parse_economy(self, payload: bytes) -> None:
+        """Money / loan / income for one company; ``value`` here is simply money - loan."""
         if not payload:
             return
         cid = payload[0]
@@ -349,6 +383,7 @@ class AdminClient:
         self._emit("stats", rec)
 
     def _emit(self, kind: str, data: dict) -> None:
+        """Call on_update, logging (not raising) any error in it."""
         if self.on_update:
             try:
                 self.on_update(kind, data)

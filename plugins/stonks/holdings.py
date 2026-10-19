@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 
 
 class Holdings:
+    """Share holdings per (user_id, symbol). user_id is Core's points user id."""
+
     def __init__(self, db, store: Any = None):
         self.db = db              # core.plugin_db.PluginDB
         self.store = store        # core.store.Store (points)
@@ -68,12 +70,14 @@ class Holdings:
         return await self.db.transaction(go)
 
     async def for_user(self, user_id: int) -> list[dict]:
+        """One user's non-zero holdings (for !portfolio and !sell)."""
         return await self.db.fetchall(
             "SELECT user_id, symbol, milli_shares FROM holdings WHERE user_id = ? AND milli_shares > 0 ORDER BY symbol",
             (int(user_id),),
         )
 
     async def list(self, symbol: Optional[str] = None) -> list[dict]:
+        """Every non-zero holding, or only those of ``symbol`` (largest first)."""
         if symbol:
             return await self.db.fetchall(
                 "SELECT user_id, symbol, milli_shares FROM holdings WHERE symbol = ? AND milli_shares > 0 "
@@ -95,6 +99,7 @@ class Holdings:
             return out
         remaining = total
         for h in holders:
+            # Round each payout down; the leftover "dust" is not paid to anyone.
             cut = (total * int(h["milli_shares"])) // pool
             if cut <= 0:
                 continue

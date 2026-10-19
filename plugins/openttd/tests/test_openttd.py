@@ -1,4 +1,8 @@
-"""OpenTTD Chat Fund helpers — no live server required."""
+"""OpenTTD Chat Fund helpers — no live server required.
+
+Guards company_price(), the SQLite ledger in openttd_market.py, and that OpenTTD
+stays off by default in Core's config.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]       # fridge-stream-core/
+ROOT = Path(__file__).resolve().parents[3]       # this repo's root (conftest.py adds Stream Core)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

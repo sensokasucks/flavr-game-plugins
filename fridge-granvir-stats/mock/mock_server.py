@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Dev stand-in for the BepInEx plugin. Serves /stats + overlay HTML on :3855."""
+"""Dev stand-in for the BepInEx plugin. Serves /stats + overlay HTML on :3855.
+
+Lets you build overlays and test Stream Core's Granvir plugin without the game:
+same port and routes as plugin/StatsServer.cs (GET /stats, /health, /ping;
+POST /command). Numbers are fake and change over time. Started by
+"START Granvir Mock.bat" (repo root) or "START Mock.bat" in this folder.
+Keep the snapshot() fields in sync with what the real plugin returns.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OVERLAY = ROOT / "overlay"
+# Loopback only, and the same port as the real plugin (Core's granvir.bridge_url default).
 HOST = "127.0.0.1"
 PORT = 3855
 
@@ -17,6 +25,7 @@ START = time.time()
 
 
 def snapshot() -> dict:
+    """Fake /stats payload; values cycle with the seconds since the mock started."""
     elapsed = int(time.time() - START)
     heat = min(100, 8 + (elapsed % 40) * 2)
     hp = max(20, 100 - (elapsed // 15) % 80)
@@ -67,12 +76,15 @@ def snapshot() -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
+    """Serves the overlay/ folder as static files, plus the JSON routes."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(OVERLAY), **kwargs)
 
     def log_message(self, fmt: str, *args) -> None:
         print("[granvir-mock]", fmt % args)
 
+    # Permissive CORS and no caching on every response (dev tool only).
     def end_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -98,6 +110,7 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
+        """POST /command always answers success: false; the mock never changes anything."""
         if self.path.split("?", 1)[0] != "/command":
             self.send_error(404)
             return

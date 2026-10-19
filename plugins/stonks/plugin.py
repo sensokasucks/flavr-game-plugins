@@ -33,12 +33,15 @@ from .tape import MarketTape
 
 log = logging.getLogger("plugins.stonks")
 
+# "special" values from commands.json that this plugin handles.
 SPECIALS = ("market_buy", "market_sell", "market_tickers", "market_portfolio")
 # Command names → what they do, for commands that don't carry a "special"
 BY_NAME = {"buy": "market_buy", "sell": "market_sell", "tickers": "market_tickers", "portfolio": "market_portfolio"}
 
 
 class GamerStonks(BasePlugin):
+    """The Gamer Stonks plugin: owns the MarketTape and the Holdings database."""
+
     name = "stonks"
 
     def __init__(self, config: dict, ctx=None):
@@ -65,6 +68,7 @@ class GamerStonks(BasePlugin):
         return out
 
     async def start(self) -> None:
+        """Load tickers (copying Core's old market_tickers.json once), open holdings, start the price loop."""
         ctx = self.ctx
         ctx.data_dir.mkdir(parents=True, exist_ok=True)
         listings = ctx.data_dir / "tickers.json"
@@ -91,11 +95,13 @@ class GamerStonks(BasePlugin):
             self.tape.save_listings()
 
     def apply_config(self, config: dict) -> None:
+        """After a dashboard save: re-read the ``stonks:`` settings into the tape."""
         if self.tape is not None:
             self.tape.configure(self.ctx.section)
             self.tape.enabled = True
 
     def service(self, name: str) -> Any:
+        """ctx.service("market") from other plugins returns the tape."""
         return self.tape if name == "market" else None
 
     async def _loop(self) -> None:
@@ -133,6 +139,11 @@ class GamerStonks(BasePlugin):
         return {"success": True, "reply": text}
 
     async def trade(self, req: ExecuteRequest, special: str) -> str:
+        """Run !tickers / !portfolio / !buy SYMBOL POINTS / !sell SYMBOL QTY|all; returns the chat reply.
+
+        Shares are bought at the current price with points (fractional shares allowed);
+        selling pays shares * price, rounded to whole points.
+        """
         tape, store, hold = self.tape, self.ctx.store, self.holdings
         user = req.user
         name = (user.username if user else "") or "someone"
@@ -200,6 +211,12 @@ class GamerStonks(BasePlugin):
     # ------------------------------------------------------------------
 
     def signal(self, payload: dict) -> dict:
+        """POST /api/market/signal from a game: move a ticker by ``pct`` with a cooldown.
+
+        Payload: {name, symbol?, book?, pct?, cooldown_sec?, scope?}; pct above 1 is read as
+        percent (5 = +5 %), otherwise as a fraction (0.05 = +5 %).
+        player_death without pct uses death_return (default -8 %).
+        """
         cfg = self.ctx.section
         tape = self.tape
         name = str(payload.get("name") or "").strip()
