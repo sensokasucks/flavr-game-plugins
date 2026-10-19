@@ -1,7 +1,13 @@
+/* Granvir stats overlay script, loaded by every page in this folder.
+   Polls GET /stats (BepInEx plugin or mock/mock_server.py, port 3855) every 1.5 s
+   and fills whichever of these element ids the page has: hp, hp-max, hp-bar, heat,
+   heat-max, heat-bar, phase, region, credits, hours, threat, squad, kills, note,
+   status. The badge shows HOST or CLIENT, or OFFLINE when /stats does not answer. */
 (function () {
   const STATS = "/stats";
   const statusEl = document.getElementById("status");
 
+  // cur as a percentage of max, clamped 0..100 (0 when max is missing).
   function pct(cur, max) {
     const c = Number(cur);
     const m = Number(max);
@@ -9,6 +15,7 @@
     return Math.max(0, Math.min(100, (c / m) * 100));
   }
 
+  // Set an element's text if the page has it; empty values show a dash.
   function text(id, value, fallback) {
     const el = document.getElementById(id);
     if (!el) return;

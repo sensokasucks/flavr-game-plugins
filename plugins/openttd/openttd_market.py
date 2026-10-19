@@ -7,6 +7,11 @@ Points stay in Stream Core's user table. This module records:
   - a simple price tick from company value
 
 Does NOT use vanilla 25% share slots. Chat owns Fridge units in SQLite.
+
+Used by plugin.py; the SQLite file path is chosen there. Tables:
+  ottd_investments  one row per !invest (points spent, pounds sent, injected yes/no)
+  ottd_pending      Game Script payloads waiting to be sent (JSON text, done flag)
+"pounds" is in-game money (OpenTTD's base currency unit).
 """
 
 from __future__ import annotations
@@ -34,6 +39,8 @@ def company_price(company: dict) -> int:
 
 
 class OpenTTDMarket:
+    """Small SQLite ledger for the Chat Fund. Each method opens its own connection."""
+
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,6 +81,7 @@ class OpenTTDMarket:
             )
             conn.commit()
 
+    # Log one chat investment; returns the new row id.
     def record_invest(
         self,
         *,
@@ -108,6 +116,7 @@ class OpenTTDMarket:
             conn.commit()
             return int(cur.lastrowid)
 
+    # Keep a Game Script payload to send later (e.g. while the Admin Port is down).
     def queue_injection(self, payload: dict) -> None:
         with self._connect() as conn:
             conn.execute(
@@ -116,6 +125,7 @@ class OpenTTDMarket:
             )
             conn.commit()
 
+    # Unsent payloads, oldest first; each dict gets its row id as "_id" for mark_done().
     def pending(self) -> list[dict]:
         with self._connect() as conn:
             rows = conn.execute(
@@ -136,6 +146,7 @@ class OpenTTDMarket:
             conn.execute("UPDATE ottd_pending SET done=1 WHERE id=?", (row_id,))
             conn.commit()
 
+    # Per company id: total points / pounds invested and how many investments.
     def funded_totals(self) -> dict[int, dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(
@@ -157,6 +168,7 @@ class OpenTTDMarket:
             }
         return out
 
+    # Newest investments first, for the overlay / dashboard feed.
     def recent(self, limit: int = 12) -> list[dict]:
         with self._connect() as conn:
             rows = conn.execute(

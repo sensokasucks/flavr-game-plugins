@@ -13,6 +13,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def _core_dir() -> Path:
+    """Locate fridge-stream-core (it must contain core/plugin_api.py) or stop the test run."""
     env = os.environ.get("STREAM_CORE_DIR", "").strip()
     core = Path(env) if env else HERE.parent / "flavr-leftovers" / "fridge-stream-core"
     if not (core / "core" / "plugin_api.py").is_file():
@@ -29,4 +30,5 @@ for path in (str(CORE), str(HERE)):
     if path in sys.path:
         sys.path.remove(path)
     sys.path.insert(0, path)
+# Tell Core's plugin loader to discover the plugins from this repo.
 os.environ["STREAM_CORE_PLUGINS_DIR"] = str(HERE / "plugins")

@@ -14,6 +14,11 @@ A later holding-AI IPO can sit on top of this module.
 
 Enable with openttd.enabled=true and set admin_password to the
 server's network.admin_password.
+
+Pieces: openttd_admin.py (the Admin Port socket), openttd_market.py (Chat Fund
+ledger), gamescript/FridgeChatFund (the in-game script that actually adds the
+money). Chat commands are in commands.json; settings under ``openttd:`` in Core's
+config.yaml (defaults in plugin.json). Overlays read GET /api/openttd/state.
 """
 
 from __future__ import annotations
@@ -31,11 +36,14 @@ from .openttd_market import OpenTTDMarket, company_price
 
 log = logging.getLogger("plugins.openttd")
 
-# fridge-stream-core/ (plugins/openttd/plugin.py -> up three)
+# fridge-stream-core/ once installed in Core (plugins/openttd/plugin.py -> up three).
+# Only used when no ctx is given (tests).
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class OpenTTDIntegration(BasePlugin):
+    """Core side of OpenTTD: company stats for overlays and the !invest Chat Fund."""
+
     name = "openttd"
 
     def __init__(self, config: dict, ctx=None, store=None):
@@ -46,9 +54,11 @@ class OpenTTDIntegration(BasePlugin):
         self.port = int(ot.get("admin_port") or 3977)
         self.password = str(ot.get("admin_password") or "")
         self.admin_name = str(ot.get("name") or "FridgeStreamCore")
+        # !invest: in-game pounds per Core point, and the allowed points per command.
         self.pounds_per_point = int(ot.get("pounds_per_point") or 1000)
         self.min_invest = int(ot.get("min_invest_points") or 10)
         self.max_invest = int(ot.get("max_invest_points") or 5000)
+        # With allow_host_invest false, chat cannot fund the streamer's own company.
         self.host_company_id = ot.get("host_company_id")
         self.allow_host_invest = bool(ot.get("allow_host_invest", True))
         self.use_gamescript = bool(ot.get("use_gamescript", True))
@@ -80,6 +90,7 @@ class OpenTTDIntegration(BasePlugin):
         ]
 
     async def start(self) -> None:
+        """Connect to the Admin Port. A failed connect is logged, not raised (Core keeps running)."""
         if not self.enabled:
             log.info("OpenTTD integration disabled in config")
             return
@@ -116,6 +127,8 @@ class OpenTTDIntegration(BasePlugin):
         return
 
     def snapshot(self) -> dict:
+        """State for /api/openttd/state and the overlays: Admin Port data plus each
+        company's ticker price (company_price) and chat-funded totals."""
         raw = self.client.snapshot() if self.client else {
             "connected": False,
             "companies": [],
@@ -167,6 +180,7 @@ class OpenTTDIntegration(BasePlugin):
             return {"connected": False, "companies": [], "error": "openttd integration not running"}
 
     async def execute(self, req: ExecuteRequest) -> dict:
+        """Route a chat command (names from commands.json) to its _cmd_* handler."""
         if not self.enabled:
             return {"success": False, "error": "openttd integration disabled"}
         name = (req.command_name or "").lower()
@@ -202,6 +216,7 @@ class OpenTTDIntegration(BasePlugin):
         return list(self.client.companies.values())
 
     def _find_company(self, token: str) -> Optional[dict]:
+        """Company by id ("3") or by part of its name (first match wins)."""
         token = (token or "").strip()
         if not token:
             return None
@@ -281,6 +296,12 @@ class OpenTTDIntegration(BasePlugin):
         return {"success": True, "reply": "OpenTTD unpaused."}
 
     async def _cmd_invest(self, args, **kw) -> dict:
+        """!invest <company> <points>: spend the chatter's points, then ask the Game
+        Script to add points * pounds_per_point to that company.
+
+        If the Game Script cannot be reached the payload is stored in ottd_pending
+        and the investment is recorded as not injected (points are still spent).
+        """
         if len(args) < 2:
             return {
                 "success": False,
@@ -318,7 +339,7 @@ class OpenTTDIntegration(BasePlugin):
                 platform, req.user.id, req.user.username, req.user.display_name or ""
             )
             spent_uid = uid
-            # current balance
+            # Check the balance, then take the points (two separate store calls).
             bal_row = await self.store.get_user(uid)
             bal = int((bal_row or {}).get("points") or 0)
             if bal < points:

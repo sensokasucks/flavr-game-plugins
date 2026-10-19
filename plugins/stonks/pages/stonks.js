@@ -1,4 +1,9 @@
-/* Gamer Stonks page (shown inside the Stream Core dashboard). API: ../routes.py */
+/* Gamer Stonks page (shown inside the Stream Core dashboard). API: ../routes.py
+
+   Loaded by pages/index.html. window.StreamCore (api, escapeHtml) comes from the
+   dashboard and sends the admin token. Tabs: listings, settings, one tab per game
+   plugin that has a "market" block in its plugin.json, investors, preview. The last
+   open tab is remembered in localStorage ("gamer_stonks_tab"). */
 (() => {
   const $ = (id) => document.getElementById(id);
   const { api, escapeHtml } = window.StreamCore;
@@ -48,6 +53,8 @@
     return String(text).replace(/[^a-z0-9_]+/gi, "-");
   }
 
+  // One settings input for a plugin.json field. Types: checkbox, map ("key: value"
+  // lines), lines (one per line), select, list (comma separated), number, password, text.
   function fieldHtml(pid, f, value) {
     const type = f.type || "text";
     const id = `f-${slug(pid)}-${slug(f.key)}`;
@@ -155,6 +162,7 @@
 
   // ---------------------------------------------------------------- listings, investors
 
+  // Listings table, book picker and holdings list from GET /api/admin/market.
   function renderMarket(data) {
     const sel = $("new-book");
     const keep = sel.value;
@@ -195,6 +203,8 @@
 
   $("refresh").onclick = load;
 
+  // Row buttons: Save sends PATCH (name, Steam App ID, live price, shown/hidden);
+  // Delist sends DELETE.
   $("book").addEventListener("click", (ev) => {
     const row = ev.target.closest("tr[data-sym]");
     if (!row) return;
@@ -244,6 +254,7 @@
     load();
   });
 
+  // List a chatter as a stock: its price follows that user's points (see tape.tick_chatter).
   $("chat-add").onclick = () => act(async () => {
     const uid = Number($("chat-uid").value);
     const sym = ($("chat-sym").value || "CHAT").toUpperCase();
@@ -284,6 +295,7 @@
     load();
   });
 
+  // Test dividend of 10 points to the holders of the symbol in the holdings box.
   $("div-test").onclick = () => act(async () => {
     const r = await api("/api/admin/market/dividend", {
       method: "POST",

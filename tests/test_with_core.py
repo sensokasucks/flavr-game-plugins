@@ -18,6 +18,7 @@ from core.config import DEFAULTS
 from core.permissions import PermissionManager
 from core.plugins import PluginManager
 
+# The game plugins that used to ship inside Stream Core (Gamer Stonks is tested in plugins/stonks/tests).
 BUNDLED = ("factorio", "granvir", "minecraft", "openttd")
 
 
@@ -79,6 +80,7 @@ class BundledPluginTests(unittest.TestCase):
                 self.assertIn(name, cmds)                                # plugin defaults fill the rest
 
     def test_old_urls_still_answer(self):
+        """Routes and overlay pages that existed when the games were built in must still answer."""
         from fastapi.testclient import TestClient
 
         from api.server import CoreState, create_app

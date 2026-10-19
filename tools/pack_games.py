@@ -20,10 +20,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PLUGINS = ROOT / "plugins"
+# Any file with one of these folder names in its path is left out of the zip.
 SKIP_PARTS = {"__pycache__", "tests", "data"}
 
 
 def tracked_files(folder: Path) -> list[Path]:
+    """Files under ``folder`` that git tracks, minus SKIP_PARTS. Without git, every file on disk."""
     try:
         out = subprocess.run(
             ["git", "ls-files", "-z", "--", str(folder)],
@@ -36,11 +38,14 @@ def tracked_files(folder: Path) -> list[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The help text is the first line of the module docstring, so keep that line short.
+    """Write the zip; returns the process exit code (1 when no plugin folders exist)."""
     ap = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
     ap.add_argument("version", nargs="?", default=_dt.date.today().strftime("%Y.%m.%d"))
     ap.add_argument("--out", default=str(ROOT / "dist"), help="folder for the zip (default dist/)")
     args = ap.parse_args(argv)
 
+    # A game folder is any plugins/<id>/ that has a plugin.json.
     games = sorted(p for p in PLUGINS.iterdir() if (p / "plugin.json").is_file())
     if not games:
         print("No plugin folders in", PLUGINS)

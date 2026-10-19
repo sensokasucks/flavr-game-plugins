@@ -1,12 +1,20 @@
-/* Gamer Stonks overlay helpers. No CDN — OBS / XSplit CEF friendly. */
+/* Gamer Stonks overlay helpers. No CDN — OBS / XSplit CEF friendly.
+
+   Exposes window.FridgeMarket for the market overlay pages (market.html,
+   market-board.html, market-chart.html, market-cycle.html and the games'
+   market-*.html). Data comes from Core: GET /api/market/state and
+   /api/market/history (routes.py). Common query-string options:
+   ?book=minecraft (or game:minecraft), ?symbols=FRG,FACT (?symbol= also works). */
 (function (root) {
   const qs = new URLSearchParams(location.search);
 
+  // Query-string value, or fallback when missing / empty.
   function param(name, fallback) {
     const v = qs.get(name);
     return v === null || v === "" ? fallback : v;
   }
 
+  // Price text: 1 decimal from 100 up, else 2.
   function fmtPx(n) {
     n = Number(n || 0);
     if (!isFinite(n)) return "—";
@@ -21,6 +29,7 @@
     return `${sign}${fmtPx(d)}  ${sign}${p.toFixed(2)}%`;
   }
 
+  // "up" / "down" / "flat" (moves within +/-0.02 % count as flat); used as a CSS class.
   function dir(pct) {
     if (pct > 0.02) return "up";
     if (pct < -0.02) return "down";
@@ -49,6 +58,7 @@
     return r.json();
   }
 
+  // Same book / symbols filter as the server applies, for pages that fetch everything.
   function filterInstruments(list) {
     const book = param("book", "");
     const raw = param("symbols", param("symbol", ""));
@@ -62,6 +72,9 @@
     });
   }
 
+  // Draw a price line on a canvas from history points [{t, p}]. opts.mode "spark"
+  // (bare line) or "tv" (grid, price labels on the right, dashed opts.open line).
+  // Green when the last price is at or above the first, red otherwise.
   function drawSeries(canvas, points, color, opts) {
     if (!canvas) return;
     opts = opts || {};
@@ -185,6 +198,8 @@
     }
   }
 
+  // Scroll innerEl left at speedPx px/s forever. innerEl must hold its content twice;
+  // it jumps back by half its width to loop. Returns measure() to call after a refill.
   function startTicker(trackEl, innerEl, speedPx) {
     let offset = 0;
     let last = performance.now();

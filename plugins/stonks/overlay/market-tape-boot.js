@@ -1,3 +1,7 @@
+/* Scrolling ticker tape for the games' market overlays (market-factorio / -minecraft / -openttd.html; load market.js first).
+   The page needs .tape-track > #inner, and optionally #event for the latest move.
+   Query string: ?speed=<px per second> (default 80), ?book=, ?symbols=A,B.
+   Polls /api/market/state every 4 s. */
 (function () {
   const M = FridgeMarket;
   const inner = document.getElementById("inner");
@@ -20,6 +24,7 @@
     try {
       const data = await M.fetchState();
       const list = M.filterInstruments(data.instruments || []);
+      // The list is written twice so the tape can wrap seamlessly (see startTicker).
       inner.innerHTML = (list.map(item).join("") || '<span class="tick flat">No listings</span>') +
         (list.length ? list.map(item).join("") : "");
       if (ev && data.last_event) {

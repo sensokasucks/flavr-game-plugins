@@ -4,6 +4,16 @@ listings and the signal cooldowns. The plugin (plugin.py) owns one tape; overlay
 through /api/market/state and /api/market/history.
 
 Moved here from Stream Core's core/market.py (2026-10). Behaviour is unchanged.
+
+An instrument (ticker) is a plain dict keyed by symbol: symbol, name, book ("core" or
+"game:<plugin id>"), role ("streamer" sorts first), status (listed / hidden / delisted),
+feed (walk / steam / chatter), price, open, high, low, base_price, min_price, max_price,
+plus steam_* and chatter_* fields. Only the listing fields (listing_records) are saved
+to data/plugins/stonks/tickers.json; live prices and history are in memory only.
+
+Price units are display numbers (1 share at price 10 costs 10 points). Fractions passed
+to apply_return are relative moves: 0.05 = +5 %. "bps" = basis points (1 bp = 0.01 %).
+Other plugins get this object through ctx.service("market"); keep method names stable.
 """
 
 from __future__ import annotations
@@ -20,9 +30,11 @@ log = logging.getLogger("plugins.stonks.tape")
 
 
 def _clean_symbol(raw: str) -> str:
+    """Uppercase, keep A-Z / 0-9 / dot, max 8 characters ("minecraft" -> "MINECRAF")."""
     sym = "".join(ch for ch in str(raw or "").upper() if ch.isalnum() or ch == ".")
     return sym[:8]
 
+# Steam Web API: current player count for one App ID (no API key needed).
 STEAM_CCU_URL = (
     "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/"
 )
@@ -63,6 +75,7 @@ class CooldownGate:
         self._last[key] = _now()
 
     def try_acquire(self, key: str, cooldown_sec: float | None) -> bool:
+        """Allowed? Then start the cooldown now. Returns whether it was allowed."""
         if not self.allow(key, cooldown_sec):
             return False
         self.touch(key)
@@ -77,6 +90,8 @@ class CooldownGate:
 
 def _walk(price: float, *, noise_bps: float, revert: float, base: float,
           lo: float, hi: float) -> float:
+    """One random-walk step: Gaussian noise of noise_bps, pulled back toward ``base`` by
+    ``revert`` (a fraction of the gap per tick), clamped to lo..hi."""
     shock = random.gauss(0, noise_bps / 10_000.0)
     nxt = price * (1.0 + shock) + (base - price) * revert
     return max(lo, min(hi, nxt))
@@ -93,6 +108,7 @@ class MarketTape:
         self.enabled = bool(cfg.get("enabled", False))
         self.tick_sec = float(cfg.get("tick_sec", 5) or 5)
         self.noise_bps = float(cfg.get("noise_bps", 18) or 18)
+        # revert_bps is stored as a fraction (15 bps -> 0.0015 of the gap closed per tick).
         self.revert = float(cfg.get("revert_bps", 15) or 15) / 10_000.0
         self.history_len = int(cfg.get("history_len", 180) or 180)
         self.steam_weight = float(cfg.get("steam_weight", 0.45) or 0.45)
@@ -112,6 +128,7 @@ class MarketTape:
         self.load_listings()
 
     def configure(self, section: dict) -> None:
+        """Apply a saved settings block (GamerStonks.apply_config after a dashboard save)."""
         cfg = section or {}
         self.enabled = bool(cfg.get("enabled", False))
         self.tick_sec = float(cfg.get("tick_sec", self.tick_sec) or self.tick_sec)
@@ -129,6 +146,8 @@ class MarketTape:
 
     def _seed_preview(self, books: list[dict]) -> None:
         """Always-on preview listings so OBS sources are not empty."""
+        # FRG (the streamer's ticker) is always listed; Steam-linked game books follow
+        # player counts, the rest random-walk.
         seeds = [("FRG", "Fridge", "core", "streamer", 10.0, None)]
         # Game books come from the installed game plugins (plugin.json "market_books")
         for row in books:
@@ -170,6 +189,12 @@ class MarketTape:
         chatter_points_scale: float | None = None,
         persist: bool = False,
     ) -> dict:
+        """Create or update a ticker and return its live dict.
+
+        An existing ticker keeps its current price (``price`` only seeds new ones);
+        min_price / max_price are reset to the arguments on every call.
+        ``persist=True`` also rewrites tickers.json.
+        """
         sym = _clean_symbol(symbol)
         if not sym:
             raise ValueError("symbol required (A-Z, 0-9, dot, max 8)")
@@ -232,6 +257,7 @@ class MarketTape:
         return inst
 
     def listing_records(self) -> list[dict]:
+        """The fields saved to tickers.json (no live price / history)."""
         out = []
         for inst in self._instruments.values():
             out.append({
@@ -267,6 +293,7 @@ class MarketTape:
         )
 
     def load_listings(self) -> None:
+        """Re-list everything from tickers.json; new tickers start at their base price."""
         path = self.listings_path
         if not path or not path.is_file():
             return
@@ -320,6 +347,7 @@ class MarketTape:
         return True
 
     def apply_trade_impact(self, symbol: str, points: float, *, side: str) -> Optional[dict]:
+        """Buys push the price up, sells down: trade_impact_bps_per_100 bps per 100 points."""
         if not self.trade_impact or not points:
             return None
         bps = self.trade_impact_bps_per_100
@@ -330,6 +358,9 @@ class MarketTape:
 
     def apply_steam_ccu(self, appid: int, ccu: int) -> list[dict]:
         """Peg every ticker with this App ID. First sample sets baseline only."""
+        # Each doubling of players vs the baseline moves the factor by steam_weight
+        # (capped at +/- steam_band doublings). "delta" mode compares with the previous
+        # sample instead of the first one.
         touched = []
         for inst in self._instruments.values():
             if inst.get("steam_appid") != int(appid):
@@ -369,6 +400,7 @@ class MarketTape:
                 inst["steam_stale"] = True
 
     def steam_appids(self) -> list[int]:
+        """App IDs of listed Steam tickers (at most 20 per poll)."""
         ids = []
         for inst in self._instruments.values():
             if inst.get("status") != "listed":
@@ -379,6 +411,7 @@ class MarketTape:
         return ids[:20]
 
     async def poll_steam(self) -> dict:
+        """Fetch player counts for every Steam ticker; failures mark the ticker stale."""
         appids = self.steam_appids()
         if not appids:
             return {"ok": True, "polled": 0}
@@ -408,6 +441,9 @@ class MarketTape:
 
     async def tick_chatter(self, store) -> dict:
         """Peg chatter listings to channel points + consecutive-stream bonus."""
+        # price = points / chatter_points_scale, times (1 + streak bonus per extra stream).
+        # With chatter_link_points the link works both ways: the chatter's points are set
+        # to match the price (store.set_points).
         if store is None:
             return {"ok": False, "updated": 0}
         updated = 0
@@ -447,6 +483,7 @@ class MarketTape:
         return {"ok": True, "updated": updated}
 
     def _push_tick(self, symbol: str, price: float, ts: float) -> None:
+        """Append a {t: unix seconds, p: price} point; keep the newest history_len."""
         row = {"t": ts, "p": round(price, 4)}
         buf = self._history.setdefault(symbol, [])
         buf.append(row)
@@ -454,6 +491,7 @@ class MarketTape:
             del buf[: len(buf) - self.history_len]
 
     def tick(self) -> dict:
+        """Random-walk every listed ticker once (GamerStonks._loop, every tick_sec seconds)."""
         now = _now()
         for inst in self._instruments.values():
             if inst.get("status") != "listed":
@@ -474,6 +512,10 @@ class MarketTape:
         return self.snapshot()
 
     def apply_return(self, symbol: str, frac: float, *, reason: str = "") -> Optional[dict]:
+        """Move one price by ``frac`` (0.05 = +5 %), clamped to its min/max; sets last_event.
+
+        Returns the ticker dict, or None for an unknown symbol.
+        """
         inst = self._instruments.get(symbol.upper())
         if not inst:
             return None
@@ -522,6 +564,11 @@ class MarketTape:
         return {"ok": True, "blocked": False, "key": key}
 
     def snapshot(self, book: str | None = None, symbols: list[str] | None = None, *, include_hidden: bool = False) -> dict:
+        """Overlay payload (/api/market/state): listed tickers with delta / pct vs open.
+
+        ``book`` matches "game:minecraft" or just "minecraft". Hidden and delisted
+        tickers are left out unless include_hidden.
+        """
         want = {s.upper() for s in (symbols or []) if s}
         items = []
         for inst in self._instruments.values():
@@ -557,6 +604,7 @@ class MarketTape:
         }
 
     def quote(self, symbol: str) -> Optional[dict]:
+        """The live ticker dict (not a copy), or None."""
         return self._instruments.get((symbol or "").upper())
 
     def stock_factor(
@@ -595,6 +643,7 @@ class MarketTape:
         }
 
     def history(self, symbol: str, points: int = 120) -> dict:
+        """Newest ``points`` history samples for the chart overlays."""
         sym = symbol.upper()
         buf = list(self._history.get(sym) or [])
         if points > 0:

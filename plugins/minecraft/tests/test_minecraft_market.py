@@ -1,8 +1,10 @@
+"""Minecraft's market maths: the dynamo follows a listed ticker, and the RF / chest planners."""
+
 import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]       # fridge-stream-core/
+ROOT = Path(__file__).resolve().parents[3]       # this repo's root (conftest.py adds Stream Core)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

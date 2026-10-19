@@ -1,13 +1,22 @@
 /**
  * Shared logic for individual Factorio stat widgets + the full overlay.
  * Works by only updating elements that exist on the current page.
+ *
+ * Loaded by every page in this folder (overlay.html, power.html, kills.html ...).
+ * Data: the bridge (server/server.js, port 3847) sends its whole latestStats object
+ * over the WebSocket on connect and on every change; while the socket is down the
+ * page polls GET /stats every 4 s instead. Element ids (power-prod, research-name,
+ * kills, deaths, evolution, alerts, tick, source, status) are the contract with the
+ * HTML pages: rename one and the matching page goes blank.
  */
 (function () {
+  // Same host/port the page was served from (the bridge serves both).
   const WS_URL = `ws://${location.hostname || 'localhost'}:${location.port || 3847}`;
   let ws = null;
   let reconnectTimer = null;
 
   // Helpers
+  // 1234567 -> "1.23 MW". formatJoules does the same for energy.
   function formatWatts(w) {
     if (w == null || isNaN(w)) return '—';
     const abs = Math.abs(w);
@@ -62,6 +71,7 @@
     if (node) node.style.width = pct + '%';
   }
 
+  // Connection badge (#status): LIVE / CONNECTING / RECONNECTING / ERROR.
   function setStatus(text, cls) {
     const node = $('status');
     if (!node) return;
@@ -70,6 +80,8 @@
   }
 
   // ---------- Renderers ----------
+  // Production / consumption bar (consumption as % of production) and accumulator
+  // charge. Without Wiretap the bridge only has approximate power.
   function renderPower(data) {
     const prod = data.power?.production_watts ?? data.power?.production_watts_approx ?? 0;
     const cons = data.power?.consumption_watts ?? 0;
@@ -91,6 +103,7 @@
     }
   }
 
+  // research.progress is 0..1 from the game.
   function renderResearch(data) {
     const r = data.research || {};
     setText('research-name', prettyTechName(r.current));
@@ -126,6 +139,7 @@
     renderEvolution(data);
   }
 
+  // Newest 8 alerts first. Warnings / turret alerts get the yellow icon.
   function renderAlerts(data) {
     const alerts = data.alerts || [];
     if (alerts.length === 0) {
@@ -203,6 +217,7 @@
     };
   }
 
+  // Retry the WebSocket after 2.5 s (only one timer at a time).
   function scheduleReconnect() {
     if (reconnectTimer) return;
     reconnectTimer = setTimeout(() => {
