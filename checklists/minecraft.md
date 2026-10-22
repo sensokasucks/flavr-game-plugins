@@ -14,11 +14,12 @@ Home: `fridge-minecraft/` (Fabric `client-mod` + `server-mod`, NeoForge `neoforg
 - [ ] Client stats: health, hunger, XP/level, armor, effects, death counter, optional inventory snapshot.
 - [ ] Server executes commands Core forwards (`!spawn`, `!give`, `!heal`, quantity, permission tiers).
 - [ ] Public commands that put chat text into the game command (`spawn`, `give`, `effect` in `plugins/minecraft/commands.json`) have an `allowedValues` list of harmless ids: no bosses, TNT, command blocks, item components / NBT. Tests: `plugins/minecraft/tests/test_minecraft_commands.py`.
-- [ ] **Chat Dynamo** + **Chat Kinetic** exist. Power 0–15 from Core metrics. Market factor applied (see [market.md](https://github.com/sensokasucks/flavr-leftovers/blob/main/checklists/market.md)). Chat Kinetic uses the same power + stock factor — no extra RPM→FE.
+- [ ] **Chat Dynamo** + **Chat Kinetic** exist. Power 0–15 from Core metrics. Stock factor from the Gamer Stonks tape (`ctx.service("market")`). Chat Kinetic uses the same power + stock factor — no extra RPM→FE.
 - [ ] Blocks: `fridge_minecraft:chat_dynamo`, `chat_kinetic`, `dividend_vault`, `dividend_chest`. Old `xsplit_*` ids are gone; worlds need blocks replaced after rebrand.
 - [ ] Dividend Chest: 54-slot hopper chest, any item, ItemHandler cap so hoppers / Create funnels can insert.
 - [ ] Command group `minecraft` binds to enabled **and** running.
-- [ ] Admin → Settings → Game plugins has a Minecraft card and Market a Minecraft sub-page (both from `plugin.json`). Admin → Integrations has a Minecraft sub-panel (health, commands Fill/Dry, metrics push, overlay URLs).
+- [ ] Market effects (dynamo factor, power drain, death dip, Dividend Vault / Chest payouts) work with Gamer Stonks running: `plugin.json` has `"core_api": 2` and `"after": ["market"]`, the tape comes from `ctx.service("market")` and payouts go through Gamer Stonks' `dividend()`. Without Gamer Stonks: factor 1x, no dips, chests don't eat items, vault work stays pending (no ack). Tests: `tests/test_market_wiring.py`.
+- [ ] Admin → Settings → Plugins has a Minecraft card and the Gamer Stonks page a Minecraft tab (both from `plugin.json`). Admin → Integrations has a Minecraft sub-panel (health, commands Fill/Dry, metrics push, overlay URLs).
 - [ ] Stats overlay modules still include inventory when the client mod is up (`overlay.show_inventory_seconds`).
 
 ### NeoForge (`fridge-minecraft/neoforge`)

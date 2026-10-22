@@ -25,6 +25,10 @@ them; install only what you use.
 4. Tick **Enabled**, **Save & apply**, restart Core again.
 5. Set up the game side (mod, bridge or server) from its folder's README.
 
+Minecraft's and Factorio's market parts (Chat Dynamo boost, power drain, death dips, vault
+dividends, the market overlays) need **Gamer Stonks** installed and enabled too. Without it the
+games still work, just with the dynamo at 1x and no payouts.
+
 Removing a game: untick it, delete its folder from `fridge-stream-core\plugins\`, restart Core.
 Its settings stay in `config.yaml` in case you put it back.
 
