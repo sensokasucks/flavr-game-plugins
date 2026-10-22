@@ -15,6 +15,11 @@ Each metrics tick (every 2 s, on_metrics) does, in order: push metrics + market
 settings to the server mod, dip the tickers if the player died, drive the placed
 Fridge blocks (Chat Dynamo / Kinetic / Dividend Chest), then pay out full vaults
 as Gamer Stonks dividends.
+
+Everything market-related needs the Gamer Stonks plugin (plugins/stonks) running:
+the tickers come from ctx.service("market") and payouts go through Gamer Stonks'
+dividend(). plugin.json says "after": ["market"] so Gamer Stonks starts first. Without
+it the dynamo runs at 1x, nothing dips, and vault work stays pending in the server mod.
 """
 
 from __future__ import annotations
@@ -31,11 +36,14 @@ log = logging.getLogger("plugins.minecraft")
 
 
 def _mc_market_cfg(config: dict) -> dict:
-    """Market settings for Minecraft: top-level ``market:`` with ``minecraft.market:`` on top."""
+    """Market settings for Minecraft, later blocks winning: the old top-level ``market:``
+    (Stream Core's built-in market, kept for old config files), then ``stonks:`` (Gamer
+    Stonks' settings: hourly_cap_points, dividend_price_bump, death_return ...), then
+    ``minecraft.market:`` (this plugin's own fields from plugin.json)."""
     mc = (config.get("minecraft") or {}).get("market") or {}
+    stonks = config.get("stonks") or {}
     mkt = config.get("market") or {}
-    # nested minecraft.market wins; top-level market supplies caps
-    return {**mkt, **mc}
+    return {**mkt, **stonks, **mc}
 
 
 def plan_machine_rf(
@@ -108,7 +116,7 @@ class MinecraftIntegration(BasePlugin):
         self.client_url = mc.get("client_mod_url", "http://127.0.0.1:3852").rstrip("/")
         self.server_url = mc.get("server_mod_url", "http://127.0.0.1:3853").rstrip("/")
         self._client: Optional[httpx.AsyncClient] = None
-        self._market = None
+        self._attached_market = None   # set by attach_market (tests); live Core leaves it None
         self._store = None
         self._core_state = None
         self.last_vault: dict = {}
@@ -116,12 +124,29 @@ class MinecraftIntegration(BasePlugin):
         self._last_deaths: int | None = None
 
     def attach_market(self, tape) -> None:
-        """Give the plugin the Gamer Stonks tape (MarketTape). The tests call this.
+        """Pin a Gamer Stonks tape (MarketTape) by hand. Only the unit tests call this;
+        a live Core never does, ``_market`` finds the tape through ctx.service instead."""
+        self._attached_market = tape
 
-        Note: current Stream Core does not call attach_market (the market is now
-        ctx.service("market")), so in a live Core ``_market`` stays None.
+    @property
+    def _market(self):
+        """The Gamer Stonks tape (plugins/stonks/tape.py MarketTape), or None.
+
+        Looked up on every use rather than once in start(), so it keeps working when
+        Gamer Stonks is switched on or restarted after Minecraft. ctx.service("market")
+        asks Core's plugin manager for whichever running plugin "provides" market.
         """
-        self._market = tape
+        if self._attached_market is not None:
+            return self._attached_market
+        return self.ctx.service("market") if self.ctx is not None else None
+
+    def _stonks(self):
+        """The running Gamer Stonks plugin (for its dividend()), or None when it is off
+        or not installed. Vault payouts go through it so holders, the payout cap and the
+        price bump all follow Gamer Stonks' own settings."""
+        plugins = getattr(self.ctx, "plugins", None) if self.ctx is not None else None
+        inst = plugins.running("stonks") if plugins is not None else None
+        return inst if inst is not None and callable(getattr(inst, "dividend", None)) else None
 
     def attach_store(self, store) -> None:
         """Core's points store (core.store.Store); Core's plugin manager calls this."""
@@ -310,6 +335,9 @@ class MinecraftIntegration(BasePlugin):
                     drain_units += rate / 15.0
                     log.info("MC %s order rf=%s rpm=%s drain=%s/15", kind, rf, rpm, rate)
             elif kind == "chest":
+                if self._stonks() is None:
+                    # Without Gamer Stonks nobody can be paid, so leave the items in the chest.
+                    continue
                 consume, work = plan_chest_burns(
                     list(dev.get("items") or []),
                     rate,
@@ -368,10 +396,10 @@ class MinecraftIntegration(BasePlugin):
         self._last_deaths = deaths
         if prev is None or deaths <= prev:
             return
+        # death_cooldown_sec / death_return are Gamer Stonks settings (stonks:), see _mc_market_cfg.
         cfg = self._cfg()
-        mkt = self.config.get("market") or {}
-        cooldown = float(cfg.get("death_cooldown_sec", mkt.get("death_cooldown_sec", 20)) or 0)
-        frac = float(cfg.get("death_return", mkt.get("death_return", -0.08)) or -0.08)
+        cooldown = float(cfg.get("death_cooldown_sec", 20) or 0)
+        frac = float(cfg.get("death_return", -0.08) or -0.08)
         tape = self._market
         if tape is None:
             return
@@ -395,8 +423,10 @@ class MinecraftIntegration(BasePlugin):
         Dividend Chest: pendingXp * chest_points_per_xp points once chest_min_xp is reached.
         Both capped at hourly_cap_points per flush. Only the work actually paid is
         acknowledged back (POST /api/market/ack), so the remainder stays pending.
+        While Gamer Stonks isn't running nothing is paid or acknowledged, so the vaults
+        keep their work until it is.
         """
-        if not self._client:
+        if not self._client or self._stonks() is None:
             return
         try:
             r = await self._client.get(f"{self.server_url}/api/market")
@@ -428,14 +458,15 @@ class MinecraftIntegration(BasePlugin):
             cap = int(cfg.get("hourly_cap_points") or 500)
             points = max(0, min(points, cap))
             if points > 0:
-                await self._pay(
+                paid = await self._pay(
                     symbol=vault_sym,
                     work=pending_rf,
                     unit="rf",
                     points=points,
                     reason="mc-vault",
                 )
-                ack_rf = points * rf_per
+                # Gamer Stonks may cap lower (its own hourly_cap_points): ack only what it paid.
+                ack_rf = int(paid.get("points") or 0) * rf_per
 
         min_xp = float(cfg.get("chest_min_xp", 1) or 1)
         xp_rate = float(cfg.get("chest_points_per_xp", 1) or 1)
@@ -444,14 +475,14 @@ class MinecraftIntegration(BasePlugin):
             cap = int(cfg.get("hourly_cap_points") or 500)
             points = max(0, min(points, cap))
             if points > 0:
-                await self._pay(
+                paid = await self._pay(
                     symbol=chest_sym,
                     work=pending_xp,
                     unit="xp",
                     points=points,
                     reason="mc-chest",
                 )
-                ack_xp = points / xp_rate if xp_rate else pending_xp
+                ack_xp = int(paid.get("points") or 0) / xp_rate
 
         if ack_rf > 0 or ack_xp > 0:
             try:
@@ -463,14 +494,23 @@ class MinecraftIntegration(BasePlugin):
                 pass
 
     async def _pay(self, *, symbol: str, work: float, unit: str, points: int, reason: str) -> dict:
-        """Pay ``points`` to the holders of ``symbol`` and bump its price by dividend_price_bump.
+        """Pay ``points`` to the holders of ``symbol`` through Gamer Stonks' dividend().
 
-        Lists the symbol in the minecraft book first if the tape does not have it.
+        Called by _flush_vaults (Dividend Vault "mc-vault", Dividend Chest "mc-chest") and
+        _drive_devices (chest burns). Lists the symbol in the minecraft book first if the
+        tape does not have it. Gamer Stonks then caps the payout at its hourly_cap_points,
+        splits it by shares (holdings.py), bumps the price by dividend_price_bump and
+        records the event for the market overlays.
+
+        Returns {"points": points actually paid, "holders": n, "burned": unpaid points, ...};
+        points 0 when Gamer Stonks isn't running.
         """
-        tape = self._market
-        store = self._store
         symbol = str(symbol or "MINECRAF").upper()
-        if tape and not tape.quote(symbol):
+        stonks = self._stonks()
+        if stonks is None or points <= 0:
+            return {"points": 0, "holders": 0, "burned": 0}
+        tape = self._market
+        if tape is not None and not tape.quote(symbol):
             tape.upsert(
                 symbol=symbol,
                 name=symbol,
@@ -480,26 +520,18 @@ class MinecraftIntegration(BasePlugin):
                 base_price=8.5,
                 persist=True,
             )
-        paid = {"holders": 0, "paid": [], "burned": points, "total": points}
-        if store and hasattr(store, "pay_dividend") and points > 0:
-            paid = await store.pay_dividend(symbol, points, f"{reason}:{unit}")
-        bump = float((self.config.get("market") or {}).get("dividend_price_bump", 0.01) or 0)
-        if tape and bump:
-            tape.apply_return(symbol, bump, reason=f"dividend:{reason}")
-        event = {
-            "symbol": symbol.upper(),
+        out = await stonks.dividend({
+            "symbol": symbol,
             "game": "minecraft",
             "unit": unit,
             "work": work,
-            "points": points,
-            "holders": paid.get("holders", 0),
-            "burned": paid.get("burned", points),
+            "points": points,      # already worked out here, so Gamer Stonks skips points_per_unit
             "reason": reason,
-        }
-        if tape:
-            tape.last_dividend = event
+        })
+        event = out.get("dividend") or {}
+        paid = {**(out.get("payout") or {}), "points": int(event.get("points") or 0)}
         log.info("MC dividend %s %s pts work=%s %s paid=%s burned=%s",
-                 symbol, points, work, unit, paid.get("holders"), paid.get("burned"))
+                 symbol, paid["points"], work, unit, paid.get("holders"), paid.get("burned"))
         return paid
 
     def overlay_catalog(self) -> list[dict]:
