@@ -24,6 +24,22 @@ What happens:
 
 Renaming is only on your PC: co-op friends see the normal names, and nothing is written into your save.
 
+## Regulars: ten extra customers
+
+`FridgeRegulars.dll` (built from `regulars/`, next to `FridgeSchedule1.dll` in `Mods`) adds ten customers,
+"Regular 1" to "Regular 10", so a busy chat has more customers to carry names. Each lives in a different
+building across the map, spends the day at two hangouts, has its own look and tastes, and becomes a
+customer like anyone else: walk up and offer a sample. Once met they join the chatter-name pool.
+
+Read this before loading a save you care about with them:
+
+- They are real NPCs, so **the save keeps them** (under their neutral names; chatter names are still
+  only on screen). That save then expects `FridgeRegulars.dll`; removing it later leaves those
+  customers missing or broken. Back up the save first
+  (`%USERPROFILE%\AppData\LocalLow\TVGS\Schedule I\Saves`).
+- In co-op **every player needs `FridgeRegulars.dll`** too.
+- To not have them at all, leave `FridgeRegulars.dll` out of `Mods` (before a save has met them).
+
 ## !mug: chat sends goons after you
 
 Off by default; switch it on in the **Mugging** box on the Schedule I page (Games). A chatter pays the
@@ -101,7 +117,9 @@ dotnet build -c Release
 ```
 
 If the game isn't in the default Steam folder add `-p:GameDir="D:\SteamLibrary\steamapps\common\Schedule I"`.
-The build copies `FridgeSchedule1.dll` into the game's `Mods` folder by itself.
+The build copies `FridgeSchedule1.dll` into the game's `Mods` folder by itself. The Regulars (optional,
+see above) build the same way from `fridge-schedule1\regulars` and copy `FridgeRegulars.dll`.
+The game must be closed while the DLLs are copied.
 
 ## Settings
 

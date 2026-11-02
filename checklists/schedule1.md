@@ -21,6 +21,9 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
       cost field only gates). Refund + chat line when the game refuses or doesn't answer within 30 s. Goons run on
       the host only; their own names come back when the mugging ends.
 - [ ] Settings: everything but `bridge_url` / `bridge_token` is `"page": true` (Schedule I page, Settings tab).
+- [ ] Regulars live in their own DLL (`regulars/`, FridgeRegulars.dll) so leaving it out turns them off. Their ids
+      `fridge_regular_01`..`10` are save data: never rename. Save names stay neutral ("Regular N"). README warns that
+      a save that met them needs the DLL, and co-op players need it too.
 - [ ] Shift rotation (`rotate_after_deals`, `rotate_after_min`, `rotate_keep_subs`) defaults off; only moves
       chatters while someone waits; keeps their deals / spent. New `people` columns go in SCHEMA and ADDED_COLUMNS.
 - [ ] Stream alerts in the game are phone pop-ups (NotificationsManager), never text messages (conversations are saved).
@@ -45,6 +48,8 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] With **Show stream alerts on the in-game phone** ticked, an Alerts-page test alert pops up on the phone and in the feed.
 - [ ] `!mug` (enabled, with points): goons come out of a nearby building, are called "<chatter>'s crew", and the
       outcome line arrives; with a knocked-out player it refunds.
+- [ ] Regulars: `FridgeRegulars` loads, "N customers found" grows by 10, each Regular walks between home and its
+      hangouts (not standing at the Northtown fallback spot), can be approached for a sample, and takes a chatter name.
 - [ ] Co-op with two players: the guest sees the host's chatter names and Chat app lists; a guest chatter's
       `!customer` gets a customer; a guest chatter's `!mug` hits the guest's player. Note whether order / deal
       lines fire on the guest, the host, or both.
