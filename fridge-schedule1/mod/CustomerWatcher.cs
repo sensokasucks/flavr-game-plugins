@@ -43,6 +43,9 @@ namespace FridgeSchedule1
         // Names this mod has put on customers right now (so Refresh knows what to undo).
         private readonly Dictionary<string, WantedName> _applied = new Dictionary<string, WantedName>();
         // Latest order per customer, so the deal event can repeat what was bought and for how much.
+        // Last counts logged by Refresh (it logs only when they change).
+        private int _lastCount = -1;
+        private int _lastUnwrapped = -1;
         private readonly Dictionary<string, Dictionary<string, object>> _lastOrder = new Dictionary<string, Dictionary<string, object>>();
 
         public CustomerWatcher(MelonLogger.Instance log)
@@ -79,6 +82,7 @@ namespace FridgeSchedule1
             if (!_loaded)
                 return;
             var list = new List<CustomerInfo>();
+            int unwrapped = 0;
             foreach (var customer in AllCustomers())
             {
                 try
@@ -89,7 +93,10 @@ namespace FridgeSchedule1
                     var id = npc.ID;
                     var wrapper = FindWrapper(id);
                     if (wrapper == null)
-                        continue;   // S1API hasn't wrapped this NPC yet; try again next second
+                    {
+                        unwrapped++;
+                        continue;   // S1API can't wrap this NPC yet; try again next second
+                    }
                     if (!_originals.ContainsKey(id))
                         _originals[id] = (wrapper.FirstName ?? "", wrapper.LastName ?? "");
                     Hook(customer, id);
@@ -110,6 +117,14 @@ namespace FridgeSchedule1
                 }
             }
             Shared.SetCustomers(true, list);
+            // One console line whenever the count changes, so the streamer can see the mod found everyone.
+            int met = list.FindAll(c => c.unlocked).Count;
+            if (list.Count != _lastCount || unwrapped != _lastUnwrapped)
+            {
+                _lastCount = list.Count;
+                _lastUnwrapped = unwrapped;
+                _log.Msg($"{list.Count} customers found ({met} met)" + (unwrapped > 0 ? $", {unwrapped} not ready yet" : ""));
+            }
         }
 
         // Every customer in the world: met ones first, then the ones still to meet.
@@ -125,12 +140,18 @@ namespace FridgeSchedule1
             }
         }
 
+        // S1API's wrapper for a game NPC. NPC.Get makes the wrapper for a base-game NPC on first ask;
+        // NPC.All only lists wrappers something already made, which left most customers out.
         private static S1API.Entities.NPC FindWrapper(string id)
         {
-            foreach (var n in S1API.Entities.NPC.All)
-                if (n != null && n.ID == id)
-                    return n;
-            return null;
+            try
+            {
+                return S1API.Entities.NPC.Get(id);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         // Put the chatter name on, or the customer's own name back, when it isn't what it should be.
@@ -145,6 +166,8 @@ namespace FridgeSchedule1
                 wrapper.FirstName = want.first ?? "";
                 wrapper.LastName = want.last ?? "";
                 _applied[id] = want;
+                var own0 = _originals[id];
+                _log.Msg($"renamed {own0.first} {own0.last} -> {$"{want.first} {want.last}".Trim()}");
             }
             else if (have != null)
             {
@@ -152,6 +175,7 @@ namespace FridgeSchedule1
                 wrapper.FirstName = own.first;
                 wrapper.LastName = own.last;
                 _applied.Remove(id);
+                _log.Msg($"{own.first} {own.last} has their own name back");
             }
         }
 
