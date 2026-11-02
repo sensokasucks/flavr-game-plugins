@@ -49,6 +49,9 @@ namespace FridgeSchedule1
         protected override Sprite IconSprite => Icon;
 
         private RectTransform _list;          // scroll list content; rows are rebuilt into it
+        private RectTransform _body;          // the list's area; its height sets row and font sizes (Scale)
+        private float _rowH = 76f;            // customer row height in UI units (Scale); other rows are fractions of it
+        private bool _loggedSize;             // sizes logged once, to check against the real phone canvas
         private readonly List<(Image bg, int tab)> _tabButtons = new List<(Image, int)>();
         private int _tab;
         private int _shownBoard = -1;         // Shared versions the list was last built from
@@ -82,7 +85,14 @@ namespace FridgeSchedule1
             // at their own preferred width, centred, so long rows were cut off on both sides).
             var body = UIFactory.Panel("Body", panel.transform, Background);
             Place(body, 0f, 0f, 1f, 0.85f);
+            _body = body.GetComponent<RectTransform>();
             _list = UIFactory.ScrollableVerticalList("List", body.transform, out _);
+            // The content box is made with a new RectTransform's default 100 px extra width; stretched
+            // between the viewport's edges that made it 100 px too wide and, centred, every row lost
+            // 50 px on each side (Sen's screenshot, 2026-11-02). Exactly the viewport's width:
+            _list.offsetMin = new Vector2(0f, _list.offsetMin.y);
+            _list.offsetMax = new Vector2(0f, _list.offsetMax.y);
+            _list.sizeDelta = new Vector2(0f, _list.sizeDelta.y);
             var vl = _list.GetComponent<VerticalLayoutGroup>();
             vl.childControlWidth = true;
             vl.childForceExpandWidth = true;
@@ -123,6 +133,7 @@ namespace FridgeSchedule1
         {
             foreach (var (bg, tab) in _tabButtons)
                 bg.color = tab == _tab ? TabOn : TabOff;
+            Scale();
             UIFactory.ClearChildren(_list);
             switch (_tab)
             {
@@ -162,8 +173,8 @@ namespace FridgeSchedule1
         private void Line(string text)
         {
             var row = UIFactory.Panel("Row", _list, RowColor);
-            row.AddComponent<LayoutElement>().minHeight = 44;
-            Label(row, text, 18, 0f, 1f);
+            row.AddComponent<LayoutElement>().minHeight = _rowH * 0.6f;
+            Label(row, text, Font(), 0f, 1f);
         }
 
         // "Finding zackfan99 (Kyle Cooley)" with a Stop button, at the top of the Customers tab while
@@ -171,11 +182,12 @@ namespace FridgeSchedule1
         private void FindingRow()
         {
             var row = UIFactory.Panel("Finding", _list, new Color(0.15f, 0.3f, 0.2f));
-            row.AddComponent<LayoutElement>().minHeight = 48;
-            Label(row, $"Finding {CustomerStatus.FindingLabel}: it's on your map", 17, 0f, 0.78f);
+            row.AddComponent<LayoutElement>().minHeight = _rowH * 0.7f;
+            Label(row, $"Finding {CustomerStatus.FindingLabel}: it's on your map", Font(), 0f, 0.78f);
             var (go, btn, _) = UIFactory.ButtonWithLabel("Stop", "Stop", row.transform, RemoveColor, 0, 0);
             Place(go, 0.8f, 0.15f, 0.99f, 0.85f);
             ButtonUtils.AddListener(btn, () => { CustomerStatus.StopFinding("stopped"); _dirty = true; });
+            ScaleButtons(row);
         }
 
         // A named customer: two lines of text on the left 62%, then Find / Remove (press twice) / Swap
@@ -183,14 +195,15 @@ namespace FridgeSchedule1
         private void CustomerRow(BoardRow r)
         {
             var row = UIFactory.Panel("Row", _list, RowColor);
-            row.AddComponent<LayoutElement>().minHeight = 76;
+            row.AddComponent<LayoutElement>().minHeight = _rowH;
 
             // Line 2: when they'll turn up (CustomerStatus.Describe, via Core's board) and how far away.
             var npc = CustomerWatcher.Instance?.Find(r.npc).npc;
             var away = CustomerStatus.Distance(npc);
             bool guest = Shared.Role == "client";
-            Label(row, $"{r.name} ({r.platform}) -> {r.customer}   {r.deals} deals, ${r.spent:0}\n" +
-                       $"{r.status}{(away.Length > 0 ? "  ·  " + away : "")}", 16, 0f, guest ? 0.8f : 0.62f);
+            // Deals / money are the chatter's totals over every customer they've had, hence "total".
+            Label(row, $"{r.name} ({r.platform}) · {Deals(r.deals)}, ${r.spent:0} total -> {r.customer}\n" +
+                       $"{r.status}{(away.Length > 0 ? "  ·  " + away : "")}", Font(), 0f, guest ? 0.8f : 0.62f);
 
             // Find: a marker on this player's phone map until Stop, arrival or FindMinutes (CustomerStatus).
             var (fgo, fbtn, _) = UIFactory.ButtonWithLabel("Find", "Find", row.transform, FindColor, 0, 0);
@@ -202,7 +215,10 @@ namespace FridgeSchedule1
                 _dirty = true;
             });
             if (guest)
+            {
+                ScaleButtons(row);
                 return;          // co-op guest: the list is the host's (LobbySync.cs), so only the host edits it
+            }
 
             bool confirming = _confirmKey == r.key;
             var (rgo, rbtn, _) = UIFactory.ButtonWithLabel("Remove", confirming ? "Sure?" : "Remove", row.transform,
@@ -221,9 +237,18 @@ namespace FridgeSchedule1
             });
 
             var (sgo, sbtn, _) = UIFactory.ButtonWithLabel("Swap", "Swap", row.transform, SwapColor, 0, 0);
-            Place(sgo, 0.885f, 0.2f, 0.995f, 0.8f);
+            Place(sgo, 0.885f, 0.2f, 0.985f, 0.8f);
             ButtonUtils.AddListener(sbtn, () =>
                 Press("app_swap", r, $"{r.name} went to the back of the line ({r.customer} is free for the next one)"));
+            ScaleButtons(row);
+        }
+
+        // UIFactory buttons come with a fixed 16 px label; match the row's font instead.
+        private void ScaleButtons(GameObject row)
+        {
+            foreach (var t in row.GetComponentsInChildren<Text>())
+                if (t != null && t.gameObject.name == "Label")
+                    t.fontSize = Font();
         }
 
         protected override void OnDestroyed()
@@ -242,8 +267,29 @@ namespace FridgeSchedule1
             _dirty = true;
         }
 
-        // Text filling the row between the fractions x0..x1 of its width; wraps, and shrinks down to
-        // 11 px before it would spill out of the row.
+        // Row and font sizes from the list's real height (the phone canvas), worked out on every rebuild:
+        // a customer row is 15% of the list area (two to three lines readable at the tabs' scale), the
+        // font a quarter of that. Logs the sizes once so a wrong-looking phone can be checked.
+        private void Scale()
+        {
+            float h = _body != null ? _body.rect.height : 0f;
+            if (h > 50f)
+                _rowH = Mathf.Max(56f, h * 0.15f);
+            if (!_loggedSize && _body != null)
+            {
+                _loggedSize = true;
+                MelonLoader.MelonLogger.Msg($"[FridgeSchedule1] phone app list {_body.rect.width:0}x{h:0}, list content " +
+                                            $"{_list.rect.width:0} wide, row {_rowH:0}, font {Font()}");
+            }
+        }
+
+        private int Font() => Mathf.Clamp(Mathf.RoundToInt(_rowH * 0.24f), 14, 40);
+
+        // "1 deal" / "3 deals"
+        private static string Deals(int n) => n == 1 ? "1 deal" : $"{n} deals";
+
+        // Text filling the row between the fractions x0..x1 of its width, left-aligned with a left margin;
+        // wraps, and shrinks (down to 11) rather than spill out of the row.
         private static void Label(GameObject row, string text, int size, float x0, float x1)
         {
             var t = UIFactory.Text("Text", text, row.transform, size, TextAnchor.MiddleLeft);
