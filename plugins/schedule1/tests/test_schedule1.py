@@ -336,6 +336,30 @@ class MockModTests(unittest.TestCase):
 
         asyncio.run(go())
 
+    def test_regulars_only(self):
+        """regulars_only: names only go on FridgeRegulars' customers; switching it on moves chatters over."""
+        async def go():
+            mgr, plugin, _replies, _store = await self.started()
+            zack = ChatUser(platform=Platform.TWITCH, id="1", username="zackfan99", display_name="ZackFan99")
+            bea = ChatUser(platform=Platform.KICK, id="2", username="bea", display_name="Bea")
+            cy = ChatUser(platform=Platform.KICK, id="3", username="cy", display_name="Cy")
+            for u in (zack, bea, cy):
+                await plugin.execute(self.req(u, "!customer"))
+            await plugin.tick()
+            self.assertEqual((await plugin.roster.get("twitch:1"))["npc_id"], "austin_steiner")   # normal customer
+
+            self.cfg["schedule1"]["regulars_only"] = True
+            plugin._wake.set()
+            await plugin.tick()
+            npcs = {k: (await plugin.roster.get(k))["npc_id"] for k in ("twitch:1", "kick:2", "kick:3")}
+            # first in line first: the two Regulars go to Zack and Bea, Cy waits (only 2 in the mock)
+            self.assertEqual(npcs, {"twitch:1": "fridge_regular_01", "kick:2": "fridge_regular_02", "kick:3": None})
+            self.assertEqual(set(self.world.names), {"fridge_regular_01", "fridge_regular_02"})
+            self.assertEqual([r["name"] for r in self.world.board["waiting"]], ["Cy"])
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
     def test_mug(self):
         """!mug: off by default; costs points; the game's answer is said in chat; refused = refunded."""
         async def go():

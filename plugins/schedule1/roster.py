@@ -79,6 +79,7 @@ def plan_assignments(
     *,
     prefer_unlocked: bool = True,
     max_named: int = 0,
+    regulars_only: bool = False,
 ) -> list[tuple[str, str]]:
     """Give waiting chatters a free customer. Returns [(person key, npc id), ...] to store.
 
@@ -87,12 +88,14 @@ def plan_assignments(
     prefer_unlocked (setting): customers the streamer has already met get names first, so a new
       name shows up in the phone's contacts right away.
     max_named (setting): most customers carrying a chatter name at once, 0 = no limit.
+    regulars_only (setting): only offer FridgeRegulars' ten customers (the mod's "regular": true).
     Chatters keep the customer they already have; waiting chatters go first come, first served.
     """
     people = list(people)
     taken = {p["npc_id"] for p in people if p.get("npc_id")}
     named = len(taken)
-    free = [c for c in customers if c.get("id") and c["id"] not in taken]
+    free = [c for c in customers if c.get("id") and c["id"] not in taken
+            and (c.get("regular") or not regulars_only)]
     # unlocked first (when preferred), then by id so the choice is the same every sync
     free.sort(key=lambda c: (not c.get("unlocked") if prefer_unlocked else False, str(c["id"])))
     waiting = sorted((p for p in people if not p.get("npc_id")), key=lambda p: (p.get("joined_at") or 0, p["key"]))
@@ -239,6 +242,13 @@ class Roster:
             "SELECT * FROM people WHERE platform = ? AND (username = ? OR LOWER(display_name) = ?)",
             (str(platform or "").lower(), n, n),
         )
+
+    async def release(self, keys: Iterable[str]) -> None:
+        """Take these chatters off their customer but keep their place in line (joined_at), so they get
+        the next free one first. plugin.py sync() uses it when ``regulars_only`` is switched on."""
+        for key in keys:
+            await self.db.execute("UPDATE people SET npc_id = NULL, assigned_at = NULL, shift_deals = 0 WHERE key = ?",
+                                  (key,))
 
     async def mirror(self, npc_by_key: dict[str, str]) -> None:
         """Co-op client: copy the host's assignments for our own chatters (key -> npc id; anyone not

@@ -26,7 +26,10 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] Settings: everything but `bridge_url` / `bridge_token` is `"page": true` (Schedule I page, Settings tab).
 - [ ] Regulars live in their own DLL (`regulars/`, FridgeRegulars.dll) so leaving it out turns them off. Their ids
       `fridge_regular_01`..`10` are save data: never rename. Save names stay neutral ("Regular N"). README warns that
-      a save that met them needs the DLL, and co-op players need it too.
+      a save that met them needs the DLL, and co-op players need it too. `regulars_only` (default **false**) names
+      only customers with `"regular": true` (mod: id prefix `fridge_regular_`, mock likewise).
+- [ ] Chat app layout uses anchors only (fractions of the app area, safe margin for the bezel), no fixed pixel
+      widths; rows stretch to the list width.
 - [ ] Shift rotation (`rotate_after_deals`, `rotate_after_min`, `rotate_keep_subs`) defaults off; only moves
       chatters while someone waits; keeps their deals / spent. New `people` columns go in SCHEMA and ADDED_COLUMNS.
 - [ ] Stream alerts in the game are phone pop-ups (NotificationsManager), never text messages (conversations are saved).
@@ -53,7 +56,8 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
       outcome line arrives; with a knocked-out player it refunds.
 - [ ] A newly named met customer texts an order within ~10 s and chat says "just texted the streamer"; the
       status column / phone list change from "next order expected ..." to "texted you an order" to "deal set for ...".
-      Find puts a marker on the phone map that follows the customer.
+      Find puts a marker on the phone map that follows the customer and stays until Stop, arrival (5 m) or FindMinutes.
+- [ ] Chat app fits the phone screen in landscape: tabs visible, rows not cut off left or right, buttons inside.
 - [ ] Regulars: `FridgeRegulars` loads, "N customers found" grows by 10, each Regular walks between home and its
       hangouts (not standing at the Northtown fallback spot), can be approached for a sample, and takes a chatter name.
 - [ ] Co-op with two players: the guest sees the host's chatter names and Chat app lists; a guest chatter's

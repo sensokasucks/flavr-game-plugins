@@ -131,6 +131,8 @@ namespace FridgeSchedule1
                         unlocked = unlocked,
                         status = code,
                         statusText = text,
+                        // must match the ids in regulars/Regulars.cs (Regular.ConfigurePrefab)
+                        regular = id.StartsWith("fridge_regular_", StringComparison.Ordinal),
                     });
                 }
                 catch (Exception ex)

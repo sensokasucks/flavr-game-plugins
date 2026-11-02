@@ -21,7 +21,7 @@
 using System;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.4.0", "sensokasucks",
+[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.5.0", "sensokasucks",
     "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
@@ -58,6 +58,10 @@ namespace FridgeSchedule1
             _port = _prefs.CreateEntry("Port", 3857, description: "HTTP port Stream Core talks to.");
             _token = _prefs.CreateEntry("Token", "",
                 description: "Optional shared secret; same text as 'Mod token' on Core's Schedule I card.");
+            // Real minutes a Find marker stays on the phone map (CustomerStatus.TickFind); it also goes
+            // when you reach the customer or press Stop in the Chat app.
+            CustomerStatus.FindMinutes = _prefs.CreateEntry("FindMinutes", 10f,
+                description: "Real minutes a Find marker stays on the phone map.").Value;
 
             _watcher = new CustomerWatcher(LoggerInstance);
             _mugger = new Mugger(LoggerInstance);
@@ -84,6 +88,7 @@ namespace FridgeSchedule1
                 _watcher.OnWorldUnloaded();
             _mugger.Clear();
             _nudges.Clear();
+            CustomerStatus.StopFinding(null);    // S1API drops map markers with the scene anyway
             _nextRefresh = 0f;
         }
 
@@ -114,6 +119,7 @@ namespace FridgeSchedule1
             _watcher.Refresh();
             _mugger.Tick();
             RunDueNudges();
+            CustomerStatus.TickFind();
         }
 
         // Order nudges (POST /nudge) whose pause is over: the customer texts an order now, unless the

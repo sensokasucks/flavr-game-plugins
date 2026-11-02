@@ -128,7 +128,7 @@ namespace FridgeSchedule1
                     {
                         ["id"] = c.id, ["first"] = c.first, ["last"] = c.last,
                         ["shown"] = c.shown, ["unlocked"] = c.unlocked,
-                        ["status"] = c.status ?? "", ["status_text"] = c.statusText ?? "",
+                        ["status"] = c.status ?? "", ["status_text"] = c.statusText ?? "", ["regular"] = c.regular,
                     }).ToList(),
                 });
                 return;

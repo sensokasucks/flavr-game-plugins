@@ -252,6 +252,15 @@ class Schedule1Customers(BasePlugin):
             return                            # main menu: nothing to name yet
         s = self._s()
         people = await self.roster.all()
+        regulars_only = bool(s.get("regulars_only"))
+        if regulars_only:
+            # Switched to "only the regulars": chatters on a normal customer let go of it, keeping their
+            # place in line, so plan_assignments moves them onto free regulars first (or they wait).
+            normal = {c["id"] for c in self._customers if not c.get("regular")}
+            moving = [p["key"] for p in people if p["npc_id"] in normal]
+            if moving:
+                await self.roster.release(moving)
+                people = await self.roster.all()
         # Shifts that are over (rotate_after_deals / rotate_after_min) go to the back of the line
         # first, so plan_assignments below hands their customers to the chatters waiting longest.
         rotated: dict[str, dict] = {}         # npc id -> the row of the chatter whose shift ended
@@ -265,7 +274,7 @@ class Schedule1Customers(BasePlugin):
             people = await self.roster.all()
         pairs = plan_assignments(self._customers, people,
                                  prefer_unlocked=bool(s.get("prefer_unlocked", True)),
-                                 max_named=int(s.get("max_named") or 0))
+                                 max_named=int(s.get("max_named") or 0), regulars_only=regulars_only)
         if pairs:
             await self.roster.assign(pairs)
             people = await self.roster.all()

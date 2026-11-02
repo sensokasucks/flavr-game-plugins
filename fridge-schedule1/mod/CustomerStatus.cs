@@ -85,26 +85,88 @@ namespace FridgeSchedule1
             }
         }
 
-        /// <summary>Put a marker that follows this customer on the phone's map (S1API MapPOI; this PC
-        /// only, gone when the save unloads). Replaces the previous Find marker.</summary>
+        // ---------------------------------------------------------------- Find marker
+        // One marker at a time on this player's phone map (S1API MapPOI; this PC only, never saved).
+        // It stays until Stop (ChatApp), until the player is within ArriveMetres of the customer, or
+        // after FindMinutes real minutes (MelonPreferences "FindMinutes", set by Core.OnInitializeMelon).
+        // TickFind (Core.OnUpdate, every second) moves it to where the customer is now; a marker bound to
+        // the NPC's transform dropped off the map too soon (Sen, 2026-11-02).
+
+        private const float ArriveMetres = 5f;
+        /// <summary>How long a Find marker stays, in real minutes (MelonPreferences "FindMinutes", default 10).</summary>
+        public static float FindMinutes = 10f;
+        private static MapPOI _marker;
+        private static S1NPC _findNpc;
+        private static float _findUntil;
+        /// <summary>"zackfan99 (Kyle Cooley)" while a marker is out, else null (ChatApp's Finding bar).</summary>
+        public static string FindingLabel { get; private set; }
+        /// <summary>Goes up whenever a marker starts or stops, so ChatApp redraws its Finding bar.</summary>
+        public static int FindVersion { get; private set; }
+
+        /// <summary>Put the Find marker on this customer (replaces the previous one) and open it on the map
+        /// when the phone's map is ready. False when the customer isn't in this save.</summary>
         public static bool Mark(S1NPC npc, string label)
         {
             try
             {
-                MapPOIManager.Remove(FindMarkerId);
+                StopFinding(null);
                 if (npc == null)
                     return false;
-                new MapPOIBuilder(FindMarkerId)
+                _marker = new MapPOIBuilder(FindMarkerId)
                     .WithLabel(label)
-                    .WithTarget(npc.transform)
+                    .WithPosition(npc.transform.position)
                     .WithTextVisibility(MapPOITextVisibility.Always)
                     .Build();
+                _findNpc = npc;
+                _findUntil = Time.realtimeSinceStartup + Mathf.Max(1f, FindMinutes) * 60f;
+                FindingLabel = label;
+                FindVersion++;
+                if (_marker.IsUIReady)
+                    _marker.Focus();
                 return true;
             }
             catch (Exception ex)
             {
                 MelonLogger.Warning("[FridgeSchedule1] map marker failed: " + ex.Message);
                 return false;
+            }
+        }
+
+        /// <summary>Take the Find marker away; with a reason ("stopped", "found", "time's up") the feed says so.</summary>
+        public static void StopFinding(string reason)
+        {
+            if (FindingLabel != null && reason != null)
+                Shared.AddFeed(reason == "found" ? $"You found {FindingLabel}" : $"Stopped finding {FindingLabel} ({reason})");
+            try { MapPOIManager.Remove(FindMarkerId); } catch { /* already gone */ }
+            _marker = null;
+            _findNpc = null;
+            if (FindingLabel != null)
+            {
+                FindingLabel = null;
+                FindVersion++;
+            }
+        }
+
+        /// <summary>Every second (Core.OnUpdate): follow the customer, end on arrival or after FindMinutes.</summary>
+        public static void TickFind()
+        {
+            if (FindingLabel == null)
+                return;
+            try
+            {
+                var me = S1Player.Local;
+                if (_findNpc == null || _marker == null)
+                    StopFinding("they left the game");
+                else if (Time.realtimeSinceStartup > _findUntil)
+                    StopFinding("time's up");
+                else if (me != null && Vector3.Distance(me.transform.position, _findNpc.transform.position) <= ArriveMetres)
+                    StopFinding("found");
+                else
+                    _marker.SetPosition(_findNpc.transform.position);
+            }
+            catch
+            {
+                StopFinding(null);
             }
         }
 

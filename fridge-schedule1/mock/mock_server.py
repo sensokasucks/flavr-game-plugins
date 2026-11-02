@@ -18,7 +18,7 @@ Lets you test Stream Core's Schedule I plugin (plugins/schedule1) without Schedu
   POST /remote               co-op client join / leave (kept in World.remote_requests); World.role = "client"
                              makes the mock act as a guest in a friend's game
 
-Fake world: 16 customers, 6 already met. Every ``--every`` seconds (default 15) a met customer
+Fake world: 18 customers (2 of them Regulars), 6 already met. Every ``--every`` seconds (default 15) a met customer
 texts an order, and the deal goes through a few seconds later; now and then you meet someone new.
 Started by "START Schedule1 Mock.bat" (repo root) or "START Mock.bat" in this folder.
 
@@ -54,6 +54,8 @@ CUSTOMERS = [
     ("peter_file", "Peter", "File"), ("sam_thompson", "Sam", "Thompson"),
     ("jeremy_wilkinson", "Jeremy", "Wilkinson"), ("charles_rowland", "Charles", "Rowland"),
     ("jerry_montero", "Jerry", "Montero"), ("doris_lubbin", "Doris", "Lubbin"),
+    # two of FridgeRegulars' ten (ids as in regulars/Regulars.cs), not met yet
+    ("fridge_regular_01", "Regular", "1"), ("fridge_regular_02", "Regular", "2"),
 ]
 MET_AT_START = 6
 PRODUCTS = ["OG Kush", "Sour Diesel", "Green Crack", "Granddaddy Purple", "Meth", "Cocaine"]
@@ -67,7 +69,8 @@ class World:
         self.rand = random.Random(seed)
         self.boot = uuid.uuid4().hex[:12]
         self.customers = [
-            {"id": cid, "first": f, "last": l, "unlocked": i < MET_AT_START}
+            {"id": cid, "first": f, "last": l, "unlocked": i < MET_AT_START,
+             "regular": cid.startswith("fridge_regular_")}      # like the mod's CustomerInfo.regular
             for i, (cid, f, l) in enumerate(CUSTOMERS)
         ]
         self.names: dict[str, dict] = {}     # id -> {"first", "last"} Core asked for

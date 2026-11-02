@@ -19,6 +19,8 @@ namespace FridgeSchedule1
         public bool unlocked;    // the streamer has met them (they're in the phone's contacts)
         public string status;    // "locked" / "deal" / "offer" / "dealer" / "waiting" (CustomerStatus.Describe)
         public string statusText;// the same in words: "deal set for 16:30-18:00 at the Docks" ("status_text" in JSON)
+        public bool regular;     // one of FridgeRegulars' ten (id "fridge_regular_NN"); plugin.py's
+                                 // regulars_only setting names only these
     }
 
     /// <summary>A name Core wants on a customer (POST /names).</summary>

@@ -40,6 +40,11 @@ Read this before loading a save you care about with them:
 - In co-op **every player needs `FridgeRegulars.dll`** too.
 - To not have them at all, leave `FridgeRegulars.dll` out of `Mods` (before a save has met them).
 
+**Only put chatter names on the extra regulars** (Settings tab, Joining box, off by default): only the ten
+Regulars carry chatter names; everyone else waits. Switching it on moves chatters off normal customers onto
+free Regulars (first in line first) or back to waiting. With more than ten chatters, pair it with **Shifts** so
+the names take turns. The mod marks them with `"regular": true` in `GET /customers`.
+
 ## !mug: chat sends goons after you
 
 Off by default; switch it on in the **Mugging** box on the Schedule I page (Games). A chatter pays the
@@ -95,8 +100,10 @@ hears "zackfan99 just texted the streamer for an order". The game's rules still 
 already have a deal, an open order, a dealer, or just finished a deal, or if you're knocked out or arrested.
 In co-op only the host's setting counts.
 
-**Find** (phone app and the page): puts a marker that follows that customer on your phone's map. The phone
-list also says how far away they are ("230 m north-east").
+**Find** (phone app and the page): puts a marker on that customer on your phone's map and keeps it on them
+until you press **Stop** (the "Finding ..." bar at the top of the Chat app's Customers tab), walk within 5 m of
+them, or 10 real minutes pass (`FindMinutes` in `UserData\MelonPreferences.cfg`). The phone list also says how
+far away they are ("230 m north-east").
 
 ## The Chat app on your phone
 
@@ -160,7 +167,7 @@ send, and how often to check.
 ## Try it without the game
 
 `START Schedule1 Mock.bat` (repo root) or `START Mock.bat` here starts a fake mod on port 3857:
-16 customers, 6 already met, an order every 15 seconds and its deal a few seconds later.
+18 customers (2 of them Regulars), 6 already met, an order every 15 seconds and its deal a few seconds later.
 Point Core at it (the default Mod URL already does), type `!customer` in chat, and watch the
 mock's window and Core's chat replies. `python mock\mock_server.py --help` lists the options
 (`--every 5` for faster orders, `--token` to test the token).
