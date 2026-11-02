@@ -5,12 +5,15 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 
 ## Must keep
 
-- [ ] HTTP **:3857**. `GET /health`, `GET /customers`, `POST /names`, `GET /events?after=N`. Same field names in
+- [ ] HTTP **:3857**. `GET /health`, `GET /customers`, `POST /names`, `GET /events?after=N`, `POST /board`,
+      `POST /notify` (phone app events `app_remove` / `app_swap` ride on `/events`). Same field names in
       `mod/BridgeServer.cs` + `mod/Shared.cs`, `mock/mock_server.py` and `plugins/schedule1/bridge.py`.
 - [ ] Bridge refuses browser `Origin`, needs `X-Fridge-Core: 1`, checks `X-Fridge-Token` when set. No CORS headers.
 - [ ] Core opt-in: `schedule1.enabled` default **false**; `schedule1.bridge_url` default `http://127.0.0.1:3857`.
 - [ ] Hidden (`avatars.hide`) and red-flagged chatters never get a name; a hidden custom flag removes them at once.
 - [ ] Renames are local only (no save writes, nothing sent to co-op players). Customers' own names come back on leave.
+- [ ] Stream alerts in the game are phone pop-ups (NotificationsManager), never text messages (conversations are saved).
+      `alerts_in_game` default **false**; hidden / red-flagged chatters never appear in alerts either.
 - [ ] Game objects only touched on the main thread (`Core.OnUpdate`); the HTTP thread only uses `Shared`.
 - [ ] Every game call in `CustomerWatcher` sits in try/catch: a game update gives log warnings, not a crash.
 - [ ] `START Schedule1 Mock.bat` / `fridge-schedule1/START Mock.bat` run without the game.
@@ -26,6 +29,9 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] Product names read like the game's ("OG Kush"), not ids.
 - [ ] `!customer leave` puts the customer's own name back without reloading.
 - [ ] Loading another save from the menu keeps the names (the mod re-applies them).
+- [ ] Console says "N customers found (M met)" with N matching the save (not just the met ones).
+- [ ] Phone shows the **Chat** app; its four tabs fill in; Remove (twice) and Swap change who has which customer.
+- [ ] With **Show stream alerts on the in-game phone** ticked, an Alerts-page test alert pops up on the phone and in the feed.
 
 ## Drop risks
 

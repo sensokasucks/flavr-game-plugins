@@ -29,6 +29,10 @@
     <Reference Include="Il2CppScheduleOne.Core"><HintPath>$(Il2CppDir)\Il2CppScheduleOne.Core.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Il2Cppmscorlib"><HintPath>$(Il2CppDir)\Il2Cppmscorlib.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(Il2CppDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <!-- Unity UI (Image, Text, Button, layout groups) for the phone app, ChatApp.cs -->
+    <Reference Include="UnityEngine.UI"><HintPath>$(Il2CppDir)\UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UIModule"><HintPath>$(Il2CppDir)\UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(Il2CppDir)\UnityEngine.TextRenderingModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Il2CppFishNet.Runtime"><HintPath>$(Il2CppDir)\Il2CppFishNet.Runtime.dll</HintPath><Private>false</Private></Reference>
     <!-- S1API (Thunderstore "S1API_Forked" / github.com/ifBars/S1API): sets NPC names across game versions -->
     <Reference Include="S1API"><HintPath>$(GameDir)\Mods\S1API.Il2Cpp.MelonLoader.dll</HintPath><Private>false</Private></Reference>

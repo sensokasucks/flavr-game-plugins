@@ -6,6 +6,9 @@ Both answer on ``schedule1.bridge_url`` (default http://127.0.0.1:3857):
   GET  /customers            {"loaded", "boot", "customers": [{"id", "first", "last", "unlocked"}]}
   POST /names                {"names": {npc id: {"first", "last"}}}  -> {"success", "applied", "missing"}
   GET  /events?after=<seq>   {"boot", "last", "events": [{"seq", "type", "id", ...}]}
+                             (type "app_remove" / "app_swap" with "key": buttons in the phone app)
+  POST /board                {"named", "waiting", "top"}: lists for the in-game phone app (plugin.board())
+  POST /notify               {"title", "text"}: a stream alert to pop up on the in-game phone
 
 "boot" is a random id the mod picks each time the game starts; when it changes, its event numbers
 start again at 1 and plugin.py re-sends the names. Every request carries ``X-Fridge-Core: 1``
@@ -60,3 +63,11 @@ class Bridge:
 
     async def events(self, after: int) -> dict:
         return await self._call("GET", "/events", params={"after": int(after)})
+
+    async def set_board(self, board: dict) -> dict:
+        """What the in-game phone app lists; plugin.py sends it after a sync when it changed."""
+        return await self._call("POST", "/board", json=board)
+
+    async def notify(self, title: str, text: str) -> dict:
+        """Pop a stream alert up on the in-game phone (plugin.py _on_alert)."""
+        return await self._call("POST", "/notify", json={"title": title, "text": text})

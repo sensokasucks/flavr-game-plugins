@@ -24,6 +24,24 @@ What happens:
 
 Renaming is only on your PC: co-op friends see the normal names, and nothing is written into your save.
 
+## The Chat app on your phone
+
+The mod adds a **Chat** app (purple speech bubble) to the in-game phone:
+
+- **Customers**: which chatter carries which customer, with their deals and money spent.
+  **Remove** (press twice) takes a chatter off the list, like `!customer leave`.
+  **Swap** sends them to the back of the waiting list so the next chatter gets the customer
+  (with nobody waiting it does nothing and tells you).
+- **Waiting**: the waiting list in order.
+- **Top**: the five chatter-customers who spent the most.
+- **Feed**: chatter-customers' orders and deals, and stream alerts.
+
+**Stream alerts on the phone**: tick **Show stream alerts on the in-game phone** on Core's Schedule I card.
+Follows, subs, raids, tips and the rest pop up like a phone notification and go into the feed. If the
+person has a customer, it says which one. **Which alerts** picks kinds (empty = all except chat flags).
+The test buttons on Core's Alerts page work too, which is the quickest way to try it. Alerts are pop-ups,
+not text messages, because the game saves text conversations and chatter names must stay out of the save.
+
 ## Install (on the PC with the game)
 
 1. **MelonLoader** 0.7.2 or newer (not 0.7.1, it breaks Schedule I mods). Use the MelonLoader installer
@@ -81,8 +99,10 @@ and checks `X-Fridge-Token` when a Token is set.
 | `GET /health` | `{"ok": true}` |
 | `GET /customers` | `{"loaded", "boot", "customers": [{"id", "first", "last", "shown", "unlocked"}]}`; `first`/`last` are the customer's own name, `shown` what the game shows now |
 | `POST /names` | `{"names": {"kyle_cooley": {"first": "zackfan99", "last": ""}}}`, the full set: customers not listed get their own name back |
-| `GET /events?after=N` | `{"boot", "last", "events": [...]}`; `type` is `contract` (order texted), `deal` (went through) or `unlocked` (met someone new), with `id`, `name`, `qty`, `products`, `payment` |
+| `GET /events?after=N` | `{"boot", "last", "events": [...]}`; `type` is `contract` (order texted), `deal` (went through) or `unlocked` (met someone new), with `id`, `name`, `qty`, `products`, `payment`; or `app_remove` / `app_swap` with `key` (phone app buttons) |
+| `POST /board` | `{"named", "waiting", "top"}`, rows `{"key", "name", "platform", "customer", "deals", "spent"}`: what the phone app lists |
+| `POST /notify` | `{"title", "text"}`: a stream alert to pop up on the phone |
 
 `boot` changes every time the game starts (event numbers start again at 1).
 Code: `mod/Core.cs` (start, main-thread loop), `mod/CustomerWatcher.cs` (game side), `mod/BridgeServer.cs` (HTTP),
-`mod/Shared.cs` (what the two threads share).
+`mod/Shared.cs` (what the two threads share), `mod/ChatApp.cs` (the phone app).

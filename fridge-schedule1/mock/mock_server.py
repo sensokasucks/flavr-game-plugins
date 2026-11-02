@@ -6,6 +6,10 @@ Lets you test Stream Core's Schedule I plugin (plugins/schedule1) without Schedu
   GET  /customers            every customer, its own name and whether you've met them
   POST /names                names Core wants on customers (anything not listed gets its own name back)
   GET  /events?after=<seq>   orders ("contract"), finished deals ("deal") and new customers ("unlocked")
+                             (the real mod also sends "app_remove" / "app_swap" from its phone app buttons;
+                             World.app_button() fakes those for tests)
+  POST /board                the lists Core wants in the phone app (kept in World.board, printed)
+  POST /notify               a stream alert for the phone (kept in World.notices, printed)
 
 Fake world: 16 customers, 6 already met. Every ``--every`` seconds (default 15) a met customer
 texts an order, and the deal goes through a few seconds later; now and then you meet someone new.
@@ -63,6 +67,8 @@ class World:
         self.events: list[dict] = []
         self.seq = 0
         self.pending: list[tuple[float, dict]] = []   # (due time, deal event) for orders in flight
+        self.board: dict = {"named": [], "waiting": [], "top": []}   # last POST /board
+        self.notices: list[dict] = []                 # every POST /notify, oldest first
 
     def shown(self, cust: dict) -> str:
         """The name the game would show now (Core's name, else the customer's own)."""
@@ -94,7 +100,27 @@ class World:
         with self.lock:
             return {"boot": self.boot, "last": self.seq, "events": [e for e in self.events if e["seq"] > after]}
 
+    def set_board(self, board: dict) -> dict:
+        """POST /board: same three lists as BridgeServer.Rows reads."""
+        with self.lock:
+            self.board = {k: [r for r in (board.get(k) or []) if isinstance(r, dict)] for k in ("named", "waiting", "top")}
+        return {"success": True}
+
+    def notify(self, body: dict) -> tuple[int, dict]:
+        """POST /notify: an alert the real mod would pop up on the phone."""
+        text = str(body.get("text") or "")
+        if not text:
+            return 400, {"success": False, "error": "text is empty"}
+        with self.lock:
+            self.notices.append({"title": str(body.get("title") or ""), "text": text})
+        return 200, {"success": True}
+
     # ---- the fake game's activity (also called straight from tests)
+
+    def app_button(self, kind: str, key: str) -> dict:
+        """The streamer pressed Remove ("app_remove") or Swap ("app_swap") in the phone app."""
+        with self.lock:
+            return self.add_event({"type": kind, "key": key})
 
     def order(self, cid: str | None = None, deal_after: float = 5.0) -> dict:
         """A met customer texts an order; its deal event follows ``deal_after`` seconds later."""
@@ -177,7 +203,8 @@ def make_handler(world: World, token: str = ""):
         def do_POST(self):
             if not self._allowed():
                 return
-            if urlparse(self.path).path != "/names":
+            path = urlparse(self.path).path
+            if path not in ("/names", "/board", "/notify"):
                 self._send(404, {"success": False, "error": "not found"})
                 return
             length = min(int(self.headers.get("Content-Length") or 0), 256 * 1024)
@@ -186,9 +213,20 @@ def make_handler(world: World, token: str = ""):
             except ValueError:
                 self._send(400, {"success": False, "error": "bad JSON"})
                 return
-            result = world.set_names(body.get("names") or {})
-            print(f"names: {len(world.names)} customer(s) renamed")
-            self._send(200, result)
+            if path == "/board":
+                result = world.set_board(body)
+                b = world.board
+                print(f"phone app: {len(b['named'])} named, {len(b['waiting'])} waiting")
+                self._send(200, result)
+            elif path == "/notify":
+                code, result = world.notify(body)
+                if code == 200:
+                    print(f"phone pop-up: {body.get('title')}: {body.get('text')}")
+                self._send(code, result)
+            else:
+                result = world.set_names(body.get("names") or {})
+                print(f"names: {len(world.names)} customer(s) renamed")
+                self._send(200, result)
 
     return Handler
 

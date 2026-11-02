@@ -198,6 +198,77 @@ class MockModTests(unittest.TestCase):
 
         asyncio.run(go())
 
+    def test_phone_app_board_and_buttons(self):
+        """The phone app's lists reach the mod; its Swap / Remove buttons come back as events."""
+        async def go():
+            self.cfg["schedule1"]["max_named"] = 1      # one customer, so the second chatter waits
+            mgr, plugin, _replies, _store = await self.started()
+            zack = ChatUser(platform=Platform.TWITCH, id="1", username="zackfan99", display_name="ZackFan99")
+            bea = ChatUser(platform=Platform.KICK, id="2", username="bea", display_name="Bea")
+            await plugin.execute(self.req(zack, "!customer"))
+            await plugin.execute(self.req(bea, "!customer"))
+            await plugin.tick()
+            board = self.world.board
+            self.assertEqual([(r["name"], r["customer"]) for r in board["named"]], [("ZackFan99", "Austin Steiner")])
+            self.assertEqual([r["name"] for r in board["waiting"]], ["Bea"])
+
+            # Swap: Zack goes to the back of the line, Bea gets the customer
+            self.world.app_button("app_swap", "twitch:1")
+            await plugin.tick()                 # reads the event, wakes the sync
+            await plugin.tick()                 # sync sends the new names and board
+            self.assertEqual([r["name"] for r in self.world.board["named"]], ["Bea"])
+            self.assertEqual([r["name"] for r in self.world.board["waiting"]], ["ZackFan99"])
+
+            # Remove: Bea is off the list; Zack, next in line, gets a customer again
+            self.world.app_button("app_remove", "kick:2")
+            await plugin.tick()
+            await plugin.tick()
+            self.assertIsNone(await plugin.roster.get("kick:2"))
+            self.assertEqual([r["name"] for r in self.world.board["named"]], ["ZackFan99"])
+
+            # Swap with nobody waiting changes nothing and says so on the phone
+            self.world.app_button("app_swap", "twitch:1")
+            await plugin.tick()
+            self.assertIn("Nobody is waiting", self.world.notices[-1]["text"])
+            self.assertTrue((await plugin.roster.get("twitch:1"))["npc_id"])
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
+    def test_stream_alerts_on_the_phone(self):
+        from core.alerts import build_alert
+
+        async def go():
+            self.cfg["avatars"]["hide"] = ["twitch:sneaky"]
+            mgr, plugin, _replies, _store = await self.started()
+            zack = ChatUser(platform=Platform.TWITCH, id="1", username="zackfan99", display_name="ZackFan99")
+            await plugin.execute(self.req(zack, "!customer"))
+            await plugin.tick()
+
+            sub = build_alert(kind="subscribe", username="zackfan99", display_name="ZackFan99", platform="twitch")
+            await plugin._on_alert(sub)
+            self.assertEqual(self.world.notices, [])          # off by default
+
+            self.cfg["schedule1"]["alerts_in_game"] = True
+            await plugin._on_alert(sub)
+            self.assertEqual(self.world.notices[-1],
+                             {"title": "New subscriber", "text": "ZackFan99 subscribed! (your customer Austin Steiner)"})
+            await plugin._on_alert(build_alert(kind="follow", username="newbie", platform="kick"))
+            self.assertEqual(self.world.notices[-1]["text"], "newbie followed!")
+            await plugin._on_alert(build_alert(kind="flag", username="newbie", platform="kick"))
+            self.assertEqual(len(self.world.notices), 2)       # "flag" is left out unless picked
+
+            # only the picked kinds; hidden chatters never show up in the game
+            self.cfg["schedule1"]["alert_kinds"] = "raid, subscribe"
+            await plugin._on_alert(build_alert(kind="follow", username="other", platform="kick"))
+            await plugin._on_alert(build_alert(kind="raid", username="sneaky", platform="twitch"))
+            self.assertEqual(len(self.world.notices), 2)
+            await plugin._on_alert(build_alert(kind="raid", username="bigstreamer", platform="twitch", viewers=50))
+            self.assertEqual(self.world.notices[-1]["text"], "bigstreamer raided with 50 viewers!")
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
     def test_hidden_chatters_never_get_a_name(self):
         async def go():
             self.cfg["avatars"]["hide"] = ["twitch:sneaky"]

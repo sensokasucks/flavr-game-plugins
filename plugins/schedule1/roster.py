@@ -163,6 +163,26 @@ class Roster:
         await self.db.execute("DELETE FROM people WHERE key = ?", (key,))
         return before is not None
 
+    async def requeue(self, key: str) -> bool:
+        """Back of the waiting list: drop their customer (the next waiting chatter gets it on the
+        next sync) and join again as of now. Deals and money spent are kept. The phone app's Swap."""
+        before = await self.get(key)
+        if not before:
+            return False
+        await self.db.execute("UPDATE people SET npc_id = NULL, assigned_at = NULL, joined_at = ? WHERE key = ?",
+                              (time.time(), key))
+        return True
+
+    async def find_name(self, platform: str, name: str) -> Optional[dict]:
+        """A row by platform + username or display name (stream alerts carry no account id)."""
+        n = str(name or "").lower().lstrip("@")
+        if not n:
+            return None
+        return await self.db.fetchone(
+            "SELECT * FROM people WHERE platform = ? AND (username = ? OR LOWER(display_name) = ?)",
+            (str(platform or "").lower(), n, n),
+        )
+
     async def assign(self, pairs: list[tuple[str, str]]) -> None:
         """Store plan_assignments() results."""
         now = time.time()

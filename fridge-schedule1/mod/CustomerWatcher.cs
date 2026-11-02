@@ -231,6 +231,8 @@ namespace FridgeSchedule1
                 fields["payment"] = payment;
                 _lastOrder[id] = fields;
                 Shared.AddEvent("contract", fields);
+                if (_applied.ContainsKey(id))   // the phone app's feed only follows chatter customers
+                    Shared.AddFeed($"{fields["name"]} wants {OrderText(fields)}");
             }
             catch (Exception ex)
             {
@@ -247,6 +249,19 @@ namespace FridgeSchedule1
             fields["name"] = ShownName(id);
             _lastOrder.Remove(id);
             Shared.AddEvent("deal", fields);
+            if (_applied.ContainsKey(id))
+                Shared.AddFeed($"{fields["name"]} bought {OrderText(fields)}");
+        }
+
+        // "3x OG Kush for $120" for the phone app's feed; same wording as order_text() + money() in plugin.py.
+        private static string OrderText(Dictionary<string, object> fields)
+        {
+            var products = fields.TryGetValue("products", out var p) && p is List<string> l && l.Count > 0
+                ? string.Join(", ", l.GetRange(0, Math.Min(3, l.Count)))
+                : "product";
+            var qty = fields.TryGetValue("qty", out var q) && q is int n ? n : 0;
+            var pay = fields.TryGetValue("payment", out var m) && m is float f ? f : 0f;
+            return (qty > 0 ? $"{qty}x {products}" : products) + $" for ${pay:0}";
         }
 
         // The streamer met a new customer. Event "unlocked"; Core may move a waiting chatter onto them.

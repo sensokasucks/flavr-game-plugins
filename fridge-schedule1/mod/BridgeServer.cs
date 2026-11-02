@@ -5,6 +5,10 @@
 //   GET  /customers            {"loaded", "boot", "customers": [{"id", "first", "last", "shown", "unlocked"}]}
 //   POST /names                {"names": {npc id: {"first", "last"}}} -> {"success", "applied", "missing"}
 //   GET  /events?after=<seq>   {"boot", "last", "events": [{"seq", "type", "id", "name", "qty", "products", "payment"}]}
+//                              (type "app_remove" / "app_swap" carry "key": a button in the phone app)
+//   POST /board                {"named": [...], "waiting": [...], "top": [...]} rows {"key", "name", "platform",
+//                              "customer", "deals", "spent"}: what the phone app lists -> {"success"}
+//   POST /notify               {"title", "text"}: a stream alert to pop up on the phone -> {"success"}
 //
 // Safety (same rules as the mock, mock/mock_server.py): listens on loopback only; everything but
 // /health needs the header X-Fridge-Core: 1 (Core always sends it); any request with a browser
@@ -25,7 +29,7 @@ namespace FridgeSchedule1
 {
     internal sealed class BridgeServer
     {
-        private const int MaxBodyBytes = 256 * 1024;   // a full set of names is a few KB
+        private const int MaxBodyBytes = 256 * 1024;   // a full set of names or a board is a few KB
 
         private readonly HttpListener _listener = new HttpListener();
         private readonly string _token;
@@ -140,7 +144,84 @@ namespace FridgeSchedule1
                 return;
             }
 
+            if (req.HttpMethod == "POST" && path == "/board")
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(ReadBody(req));
+                    var root = doc.RootElement;
+                    Shared.SetBoard(new Board
+                    {
+                        named = Rows(root, "named"),
+                        waiting = Rows(root, "waiting"),
+                        top = Rows(root, "top"),
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Json(ctx, 400, Error("bad body: " + ex.Message));
+                    return;
+                }
+                Json(ctx, 200, new Dictionary<string, object> { ["success"] = true });
+                return;
+            }
+
+            if (req.HttpMethod == "POST" && path == "/notify")
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(ReadBody(req));
+                    var n = new Notice { title = Str(doc.RootElement, "title"), text = Str(doc.RootElement, "text") };
+                    if (n.text.Length == 0)
+                    {
+                        Json(ctx, 400, Error("text is empty"));
+                        return;
+                    }
+                    Shared.AddNotice(n);      // shown by Core.OnUpdate on the main thread
+                }
+                catch (Exception ex)
+                {
+                    Json(ctx, 400, Error("bad body: " + ex.Message));
+                    return;
+                }
+                Json(ctx, 200, new Dictionary<string, object> { ["success"] = true });
+                return;
+            }
+
             Json(ctx, 404, Error("not found"));
+        }
+
+        // The request body as text ("{}" when empty); refuses bodies over MaxBodyBytes.
+        private static string ReadBody(HttpListenerRequest req)
+        {
+            if (req.ContentLength64 > MaxBodyBytes)
+                throw new InvalidDataException("too large");
+            using var reader = new StreamReader(req.InputStream, Encoding.UTF8);
+            var body = reader.ReadToEnd();
+            return string.IsNullOrWhiteSpace(body) ? "{}" : body;
+        }
+
+        // One list of POST /board rows; field names match plugin.py's board().
+        private static List<BoardRow> Rows(JsonElement root, string key)
+        {
+            var list = new List<BoardRow>();
+            if (!root.TryGetProperty(key, out var arr) || arr.ValueKind != JsonValueKind.Array)
+                return list;
+            foreach (var r in arr.EnumerateArray())
+            {
+                if (r.ValueKind != JsonValueKind.Object)
+                    continue;
+                list.Add(new BoardRow
+                {
+                    key = Str(r, "key"),
+                    name = Str(r, "name"),
+                    platform = Str(r, "platform"),
+                    customer = Str(r, "customer"),
+                    deals = r.TryGetProperty("deals", out var d) && d.ValueKind == JsonValueKind.Number ? d.GetInt32() : 0,
+                    spent = r.TryGetProperty("spent", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetDouble() : 0,
+                });
+            }
+            return list;
         }
 
         // Web pages out, Core's header in, token when one is set.
@@ -168,13 +249,8 @@ namespace FridgeSchedule1
         // {"names": {"kyle_cooley": {"first": "zackfan99", "last": ""}, ...}}
         private static Dictionary<string, WantedName> ReadNames(HttpListenerRequest req)
         {
-            if (req.ContentLength64 > MaxBodyBytes)
-                throw new InvalidDataException("too large");
-            string body;
-            using (var reader = new StreamReader(req.InputStream, Encoding.UTF8))
-                body = reader.ReadToEnd();
             var result = new Dictionary<string, WantedName>();
-            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
+            using var doc = JsonDocument.Parse(ReadBody(req));
             if (!doc.RootElement.TryGetProperty("names", out var names) || names.ValueKind != JsonValueKind.Object)
                 return result;
             foreach (var p in names.EnumerateObject())

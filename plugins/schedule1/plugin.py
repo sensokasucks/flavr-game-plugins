@@ -12,8 +12,11 @@ commands.json. Stats overlay / points commands / paid events are later steps
 
 The background loop (_loop) runs every ``poll_sec`` seconds while the plugin is on:
   - every ``sync_sec`` (or straight away after a join / leave / unlock): read the game's customers,
-    drop hidden or red-flagged chatters, hand waiting chatters free customers, send the names;
-  - every pass: read new game events (orders, deals, unlocks) and announce them.
+    drop hidden or red-flagged chatters, hand waiting chatters free customers, send the names and
+    the lists for the mod's in-game phone app (board());
+  - every pass: read new game events (orders, deals, unlocks, phone app buttons) and act on them.
+Stream alerts (follows, subs, raids, ...) reach _on_alert from Core's event bus; with
+``alerts_in_game`` on they pop up on the in-game phone too.
 """
 
 from __future__ import annotations
@@ -33,6 +36,17 @@ from .roster import Roster, clean_name, desired_names, person_key, plan_assignme
 log = logging.getLogger("plugins.schedule1")
 
 RED_FLAG_REFRESH_SEC = 30     # how often the red-flag list is re-read from Core's database
+BOARD_TOP = 5                 # top spenders listed in the phone app
+# Alert kinds sent to the game when ``alert_kinds`` is empty: every kind in core/alerts.py KINDS
+# except "flag" (custom chat flags are a moderation tool, not a celebration).
+ALERT_KINDS_SKIPPED_BY_DEFAULT = {"flag"}
+
+
+def alert_kinds(setting: Any) -> set[str]:
+    """``alert_kinds`` as a set of lower-case kinds; accepts a list or "follow, raid" text. Empty = all."""
+    if isinstance(setting, str):
+        setting = setting.split(",")
+    return {str(k).strip().lower() for k in (setting or []) if str(k).strip()}
 
 
 def money(amount: Any) -> str:
@@ -71,6 +85,8 @@ class Schedule1Customers(BasePlugin):
         self._after = 0                       # last event number handled
         self._sent: Optional[dict] = None     # names last sent to POST /names
         self._sent_boot: Optional[str] = None
+        self._board_sent: Optional[dict] = None   # board last sent to POST /board
+        self._board_boot: Optional[str] = None
         self._red: set[tuple[str, str]] = set()   # (platform, user id or lower name) red-flagged
         self._red_at = 0.0
         self._flagged_now: set[str] = set()   # person keys hidden by a custom flag this session
@@ -102,6 +118,7 @@ class Schedule1Customers(BasePlugin):
         if bus is not None:
             bus.on_chat(self._on_chat)       # the event bus has no "off": handlers check _running
             bus.on_flag(self._on_flag_event)
+            bus.on_alert(self._on_alert)
         self._running = True
         self._task = asyncio.create_task(self._loop(), name="schedule1-customers")
         log.info("Schedule I customers started (mod at %s)", self.bridge.base_url)
@@ -149,7 +166,8 @@ class Schedule1Customers(BasePlugin):
             if self.connected or not self.last_error:
                 log.info("Schedule I: %s", exc)
             self.connected, self.last_error = False, str(exc)
-            self._sent = None                 # re-send names once the mod is back
+            self._sent = None                 # re-send names and board once the mod is back
+            self._board_sent = None
 
     # ------------------------------------------------------------------ hidden chatters
 
@@ -218,6 +236,29 @@ class Schedule1Customers(BasePlugin):
         if names != self._sent or boot != self._sent_boot:
             await self.bridge.set_names(names)
             self._sent, self._sent_boot = names, boot
+        board = await self.board(people)
+        if board != self._board_sent or boot != self._board_boot:
+            await self.bridge.set_board(board)
+            self._board_sent, self._board_boot = board, boot
+
+    async def board(self, people: list[dict]) -> dict:
+        """The in-game phone app's lists (POST /board; read by the mod's BridgeServer.Rows / ChatApp.cs).
+
+        named = chatters on a customer that's in this save, waiting = the list in order,
+        top = best spenders. Hidden / red-flagged chatters were already removed by sync().
+        """
+        by_id = {c["id"]: c for c in self._customers}
+
+        def row(r: dict, cust: Optional[dict] = None) -> dict:
+            return {"key": r["key"], "name": clean_name(r["display_name"], r["username"]),
+                    "platform": r["platform"],
+                    "customer": f"{cust.get('first', '')} {cust.get('last', '')}".strip() if cust else "",
+                    "deals": int(r["deals"] or 0), "spent": float(r["spent"] or 0)}
+
+        named = [row(r, by_id[r["npc_id"]]) for r in people if r["npc_id"] in by_id]
+        waiting = [row(r) for r in people if not r["npc_id"]]
+        top = [row(r, by_id.get(r["npc_id"] or "")) for r in await self.roster.top(BOARD_TOP)]
+        return {"named": named, "waiting": waiting, "top": top}
 
     async def _announce_new(self, pairs: list[tuple[str, str]], people: list[dict]) -> None:
         """'zackfan99 is now a customer' in chat, on the chatter's own platform (``announce_new``)."""
@@ -251,12 +292,16 @@ class Schedule1Customers(BasePlugin):
                 log.exception("Schedule I event %s", ev)
 
     async def handle_event(self, ev: dict) -> None:
-        """One game event: "contract" (a customer texted an order), "deal" (it went through), "unlocked"."""
+        """One game event: "contract" (a customer texted an order), "deal" (it went through), "unlocked",
+        or a phone app button: "app_remove" / "app_swap" with the chatter's ``key`` (mod ChatApp.cs)."""
         kind = str(ev.get("type") or "")
         npc = str(ev.get("id") or "")
         s = self._s()
         if kind == "unlocked":
             self._wake.set()                  # prefer_unlocked may move a waiting chatter onto them
+            return
+        if kind in ("app_remove", "app_swap"):
+            await self._app_button(kind, str(ev.get("key") or ""))
             return
         if kind == "deal":
             row = await self.roster.record_deal(npc, float(ev.get("payment") or 0))
@@ -275,6 +320,63 @@ class Schedule1Customers(BasePlugin):
         elif kind == "deal" and s.get("announce_deals", True):
             await self._say(row["platform"], f"{who} bought {order_text(ev)} for {money(ev.get('payment'))} "
                                              f"(deal #{row['deals']}).")
+
+    async def _app_button(self, kind: str, key: str) -> None:
+        """The streamer pressed Remove or Swap on a chatter in the in-game phone app.
+
+        Remove = off the list (like !customer leave). Swap = back of the waiting list, so the next
+        waiting chatter gets the customer; with nobody waiting it does nothing and says so on the phone.
+        Either way the next sync sends the new names and board.
+        """
+        row = await self.roster.get(key)
+        if not row:
+            return
+        who = clean_name(row["display_name"], row["username"])
+        if kind == "app_remove":
+            await self.roster.leave(key)
+            log.info("Schedule I: %s removed from the phone app", who)
+        else:
+            if (await self.roster.counts())["waiting"] == 0:
+                await self.bridge.notify("Chat customers", f"Nobody is waiting, so {who} keeps their customer.")
+                return
+            await self.roster.requeue(key)
+            log.info("Schedule I: %s swapped to the back of the line from the phone app", who)
+        self._wake.set()
+
+    async def _on_alert(self, payload: dict) -> None:
+        """A stream alert (follow, sub, raid, ...; Core's Alerts page test buttons too) -> phone pop-up.
+
+        Only with ``alerts_in_game`` on, only the kinds in ``alert_kinds`` (empty = all but "flag"),
+        never for hidden / red-flagged chatters, and only while a save is loaded. When the alerter
+        carries a customer, the pop-up says which one.
+        """
+        s = self._s()
+        if not self._running or self.bridge is None or not s.get("alerts_in_game") or not self._loaded:
+            return
+        kind = str(payload.get("kind") or "").lower()
+        wanted = alert_kinds(s.get("alert_kinds"))
+        if (wanted and kind not in wanted) or (not wanted and kind in ALERT_KINDS_SKIPPED_BY_DEFAULT):
+            return
+        plat = str(payload.get("platform") or "").lower()
+        username = str(payload.get("username") or "")
+        shown = str(payload.get("display_name") or "")
+        if self.is_hidden(plat, "", username, shown):
+            return
+        text = str(payload.get("headline") or "").strip()
+        if not text:
+            return
+        safe = clean_name(shown, username)      # names the game's font can't draw become the username
+        if shown and safe and safe != shown:
+            text = text.replace(shown, safe)
+        row = await self.roster.find_name(plat, username) or await self.roster.find_name(plat, shown)
+        cust = next((c for c in self._customers if row and c["id"] == row["npc_id"]), None)
+        if cust:
+            own = f"{cust.get('first', '')} {cust.get('last', '')}".strip()
+            text = f"{text} (your customer {own})"
+        try:
+            await self.bridge.notify(str(payload.get("title") or "Stream alert"), text)
+        except BridgeError as exc:
+            log.info("Schedule I: alert not shown in the game: %s", exc)
 
     async def _say(self, platform: str, text: str) -> None:
         try:

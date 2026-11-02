@@ -26,6 +26,32 @@ namespace FridgeSchedule1
         public string last;
     }
 
+    /// <summary>One chatter on the phone app's lists (POST /board). Built by Core's plugin.py board().</summary>
+    internal sealed class BoardRow
+    {
+        public string key;       // Core's person key ("twitch:123"); sent back with the app's Remove / Swap
+        public string name;      // chatter name as shown in chat
+        public string platform;  // twitch / youtube / kick
+        public string customer;  // the customer's own name ("Kyle Cooley"); empty while waiting
+        public int deals;
+        public double spent;     // in-game dollars
+    }
+
+    /// <summary>What the phone app shows from Core: named chatters, the waiting list, top spenders.</summary>
+    internal sealed class Board
+    {
+        public List<BoardRow> named = new List<BoardRow>();
+        public List<BoardRow> waiting = new List<BoardRow>();
+        public List<BoardRow> top = new List<BoardRow>();
+    }
+
+    /// <summary>A stream alert Core wants shown in the game (POST /notify): a phone pop-up plus a feed line.</summary>
+    internal sealed class Notice
+    {
+        public string title;     // "New subscriber"
+        public string text;      // "zackfan99 subscribed!"
+    }
+
     internal static class Shared
     {
         // Events kept for GET /events; Core polls every couple of seconds, so this is plenty.
@@ -42,6 +68,16 @@ namespace FridgeSchedule1
         private static readonly List<Dictionary<string, object>> _events = new List<Dictionary<string, object>>();
         private static long _seq;
         private static Dictionary<string, WantedName> _pending;
+
+        // Phone app data (ChatApp.cs). _boardVersion / _feedVersion go up on every change so the
+        // app only rebuilds its lists when something is new.
+        private const int MaxFeed = 40;        // feed lines the app keeps (newest first)
+        private const int MaxNotices = 20;     // alerts waiting for the main thread; more are dropped
+        private static Board _board = new Board();
+        private static int _boardVersion;
+        private static readonly List<string> _feed = new List<string>();
+        private static int _feedVersion;
+        private static readonly Queue<Notice> _notices = new Queue<Notice>();
 
         /// <summary>Main thread: the latest customer list (CustomerWatcher.Refresh).</summary>
         public static void SetCustomers(bool loaded, List<CustomerInfo> customers)
@@ -60,7 +96,8 @@ namespace FridgeSchedule1
                 return (_loaded, new List<CustomerInfo>(_customers));
         }
 
-        /// <summary>Main thread: add an order / deal / unlock event (CustomerWatcher's game listeners).</summary>
+        /// <summary>Main thread: add an event (CustomerWatcher's orders / deals / unlocks, ChatApp's
+        /// "app_remove" / "app_swap" button presses). Core reads them with GET /events.</summary>
         public static void AddEvent(string type, Dictionary<string, object> fields)
         {
             lock (Lock)
@@ -107,6 +144,61 @@ namespace FridgeSchedule1
                 _pending = null;
                 return p;
             }
+        }
+
+        /// <summary>HTTP thread (POST /board): the lists the phone app shows.</summary>
+        public static void SetBoard(Board board)
+        {
+            lock (Lock)
+            {
+                _board = board ?? new Board();
+                _boardVersion++;
+            }
+        }
+
+        /// <summary>Main thread (ChatApp): the board and its version number.</summary>
+        public static (Board board, int version) GetBoard()
+        {
+            lock (Lock)
+                return (_board, _boardVersion);
+        }
+
+        /// <summary>Either thread: add a line to the app's feed (orders, deals, alerts).</summary>
+        public static void AddFeed(string line)
+        {
+            if (string.IsNullOrEmpty(line))
+                return;
+            lock (Lock)
+            {
+                _feed.Insert(0, $"{DateTime.Now:HH:mm}  {line}");
+                if (_feed.Count > MaxFeed)
+                    _feed.RemoveRange(MaxFeed, _feed.Count - MaxFeed);
+                _feedVersion++;
+            }
+        }
+
+        /// <summary>Main thread (ChatApp): copy of the feed, newest first, and its version number.</summary>
+        public static (List<string> lines, int version) GetFeed()
+        {
+            lock (Lock)
+                return (new List<string>(_feed), _feedVersion);
+        }
+
+        /// <summary>HTTP thread (POST /notify): queue an alert for Core.OnUpdate to show.</summary>
+        public static void AddNotice(Notice n)
+        {
+            lock (Lock)
+            {
+                if (_notices.Count < MaxNotices)
+                    _notices.Enqueue(n);
+            }
+        }
+
+        /// <summary>Main thread (Core.OnUpdate): the next alert to show, or null.</summary>
+        public static Notice TakeNotice()
+        {
+            lock (Lock)
+                return _notices.Count > 0 ? _notices.Dequeue() : null;
         }
     }
 }
