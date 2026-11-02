@@ -4,3 +4,6 @@
 #people th, #people td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border); }
 #people td.waiting { color: var(--muted); font-style: italic; }
 .inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+
+/* Settings tab: one box per field group, side by side when there is room (same as Gamer Stonks). */
+.mc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }

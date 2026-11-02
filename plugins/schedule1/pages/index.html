@@ -22,6 +22,24 @@
     <span id="status" class="muted" role="status"></span>
   </div>
 
+  <div class="subtabs" id="tabs" role="tablist">
+    <button type="button" class="subtab active" data-sub="customers">Customers</button>
+    <button type="button" class="subtab" data-sub="settings">Settings</button>
+  </div>
+
+  <!-- Settings tab: the plugin.json fields marked "page": true, grouped by "group" (customers.js
+       renderSettings). The mod address and token stay on Settings → Plugins with Enabled. -->
+  <section class="sub" data-sub="settings" hidden>
+    <p class="hint">These apply straight away, no restart. The mod address and token are on
+      Settings → Plugins, next to Enabled.</p>
+    <div id="settings" class="mc-grid"></div>
+    <div class="form-row" style="gap:8px;flex-wrap:wrap">
+      <button type="button" class="primary" id="save-settings">Save settings</button>
+      <span class="muted" id="settings-status"></span>
+    </div>
+  </section>
+
+  <section class="sub" data-sub="customers">
   <fieldset class="cfg-card">
     <legend>Customers</legend>
     <p class="hint" id="summary"></p>
@@ -45,6 +63,7 @@
       <button type="submit">Add</button>
     </form>
   </fieldset>
+  </section>
 </main>
 <script src="customers.js"></script>
 </body>

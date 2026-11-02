@@ -1,4 +1,5 @@
-/* Schedule I customers page (pages/index.html). API: ../routes.py
+/* Schedule I customers page (pages/index.html). API: ../routes.py (Customers tab) and Core's
+   /api/admin/plugins routes (Settings tab).
 
    window.StreamCore (api, escapeHtml, resize) comes from the dashboard's plugin-page.js and
    sends the admin token. Refreshes every 5 s while the page is open. */
@@ -70,7 +71,100 @@
     } catch (e) { say(String(e.message || e)); }
   });
 
+  // ---------------------------------------------------------------- tabs
+
+  const TAB_KEY = "schedule1.tab";     // remembered tab (this browser only)
+
+  function showTab(sub) {
+    const tabs = Array.from(document.querySelectorAll("#tabs .subtab"));
+    if (!tabs.some((b) => b.dataset.sub === sub)) sub = "customers";
+    tabs.forEach((b) => {
+      const on = b.dataset.sub === sub;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    document.querySelectorAll("section.sub").forEach((s) => { s.hidden = s.dataset.sub !== sub; });
+    if (sub === "settings") loadSettings();
+    try { localStorage.setItem(TAB_KEY, sub); } catch (_) { /* private window: fine */ }
+    resize();
+  }
+
+  $("tabs").addEventListener("click", (ev) => {
+    const b = ev.target.closest(".subtab");
+    if (b) showTab(b.dataset.sub);
+  });
+
+  // ---------------------------------------------------------------- settings tab
+  // Fields come from GET /api/admin/plugins (this plugin's row: settings + current values); the ones
+  // marked "page": true in plugin.json are shown here. Saved with PUT /api/admin/plugins/schedule1/settings,
+  // which checks and converts the values; plugin.py reads its config live, so no restart.
+  // Field HTML follows the Gamer Stonks page (plugins/stonks/pages/stonks.js fieldHtml) so both look alike.
+
+  function pathGet(obj, key) {
+    return String(key).split(".").reduce((cur, part) => (cur && typeof cur === "object" ? cur[part] : undefined), obj);
+  }
+
+  function fieldHtml(f, value) {
+    const type = f.type || "text";
+    const attrs = `id="f-${escapeHtml(f.key)}" class="plg-field" data-key="${escapeHtml(f.key)}" data-type="${escapeHtml(type)}"`;
+    const label = escapeHtml(f.label || f.key);
+    const help = f.help ? ` <span class="field-help">${escapeHtml(f.help)}</span>` : "";
+    if (type === "checkbox") {
+      return `<label class="check"><input type="checkbox" ${attrs} ${value ? "checked" : ""} /> ${label}${help}</label>`;
+    }
+    if (type === "select") {
+      const opts = (f.options || []).map((o) =>
+        `<option value="${escapeHtml(String(o))}" ${String(o) === String(value ?? "") ? "selected" : ""}>${escapeHtml(String(o))}</option>`).join("");
+      return `<label>${label}${help}<select ${attrs}>${opts}</select></label>`;
+    }
+    const shown = type === "list" ? (Array.isArray(value) ? value.join(", ") : String(value ?? "")) : (value ?? "");
+    const inputType = type === "number" ? "number" : "text";
+    const extra = type === "number"
+      ? ["min", "max", "step"].filter((k) => f[k] != null).map((k) => ` ${k}="${escapeHtml(String(f[k]))}"`).join("") : "";
+    return `<label>${label}${help}<input type="${inputType}" ${attrs} value="${escapeHtml(String(shown))}"${extra} /></label>`;
+  }
+
+  async function loadSettings() {
+    let p;
+    try {
+      p = ((await api("/api/admin/plugins")).plugins || []).find((x) => x.id === "schedule1");
+    } catch (e) {
+      $("settings-status").textContent = String(e.message || e);
+      return;
+    }
+    if (!p) return;
+    const groups = [];
+    (p.settings || []).filter((f) => f.page).forEach((f) => {
+      const name = f.group || "Settings";
+      let g = groups.find((x) => x.name === name);
+      if (!g) groups.push((g = { name, fields: [] }));
+      g.fields.push(f);
+    });
+    $("settings").innerHTML = groups.map((g) =>
+      `<fieldset class="cfg-card"><legend>${escapeHtml(g.name)}</legend>` +
+      g.fields.map((f) => fieldHtml(f, pathGet(p.values || {}, f.key))).join("") +
+      `</fieldset>`).join("");
+    resize();
+  }
+
+  $("save-settings").addEventListener("click", async () => {
+    const values = {};
+    $("settings").querySelectorAll(".plg-field").forEach((el) => {
+      values[el.dataset.key] = el.dataset.type === "checkbox" ? el.checked : el.value;
+    });
+    try {
+      await api("/api/admin/plugins/schedule1/settings", { method: "PUT", body: JSON.stringify({ values }) });
+      $("settings-status").textContent = "Saved";
+      loadSettings();
+    } catch (e) {
+      $("settings-status").textContent = String(e.message || e);
+    }
+  });
+
   $("refresh").addEventListener("click", load);
+  let start = "customers";
+  try { start = localStorage.getItem(TAB_KEY) || start; } catch (_) { /* fine */ }
+  showTab(start);
   load();
   setInterval(load, 5000);
 })();

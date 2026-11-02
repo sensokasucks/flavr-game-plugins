@@ -422,6 +422,40 @@ class MockModTests(unittest.TestCase):
 
         asyncio.run(go())
 
+    def test_settings_tab_saves_live(self):
+        """The page's Settings tab: "page" fields are listed and saved through Core's plugin settings
+        route, and the running plugin sees the new value without a restart."""
+        from unittest import mock
+        from api import admin_routes
+        from api.server import CoreState, create_app
+
+        async def go():
+            mgr, plugin, _replies, _store = await self.started()
+            state = CoreState()
+            state.config = self.cfg
+            state.games = mgr.games
+            state.plugins = mgr
+            mgr.get_config = lambda: state.config        # the plugin follows the state's live config
+            plugin.ctx.get_config = lambda: state.config
+            app = create_app(state)
+            transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 50000))
+            admin = {"X-Admin-Token": TOKEN}
+            with mock.patch.object(admin_routes, "save_config", side_effect=lambda c: None), \
+                    mock.patch.object(admin_routes, "load_config", side_effect=lambda *a, **k: state.config):
+                async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:3850") as c:
+                    rows = (await c.get("/api/admin/plugins", headers=admin)).json()["plugins"]
+                    fields = {f["key"]: f for f in next(p for p in rows if p["id"] == "schedule1")["settings"]}
+                    self.assertTrue(fields["rotate_after_deals"].get("page"))
+                    self.assertFalse(fields["bridge_url"].get("page"))     # stays on the Plugins card
+                    r = await c.put("/api/admin/plugins/schedule1/settings", headers=admin,
+                                    json={"values": {"rotate_after_deals": "2", "alerts_in_game": True}})
+                    self.assertEqual(r.status_code, 200, r.text)
+            self.assertEqual(plugin._s()["rotate_after_deals"], 2)
+            self.assertTrue(plugin._s()["alerts_in_game"])
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
 
 if __name__ == "__main__":
     unittest.main()
