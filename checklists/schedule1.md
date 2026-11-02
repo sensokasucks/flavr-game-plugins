@@ -6,12 +6,21 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 ## Must keep
 
 - [ ] HTTP **:3857**. `GET /health`, `GET /customers`, `POST /names`, `GET /events?after=N`, `POST /board`,
-      `POST /notify` (phone app events `app_remove` / `app_swap` ride on `/events`). Same field names in
+      `POST /notify`, `POST /mug`, `POST /remote` (phone app events `app_remove` / `app_swap`, mug answers
+      `mug_result` / `mug_outcome` and co-op `remote_join` / `remote_leave` ride on `/events`). Same field names in
       `mod/BridgeServer.cs` + `mod/Shared.cs`, `mock/mock_server.py` and `plugins/schedule1/bridge.py`.
 - [ ] Bridge refuses browser `Origin`, needs `X-Fridge-Core: 1`, checks `X-Fridge-Token` when set. No CORS headers.
 - [ ] Core opt-in: `schedule1.enabled` default **false**; `schedule1.bridge_url` default `http://127.0.0.1:3857`.
 - [ ] Hidden (`avatars.hide`) and red-flagged chatters never get a name; a hidden custom flag removes them at once.
-- [ ] Renames are local only (no save writes, nothing sent to co-op players). Customers' own names come back on leave.
+- [ ] Renames never reach the save. Customers' own names come back on leave.
+- [ ] Co-op: the host's mod decides; it shares names / lists through Steam lobby data (`mod/LobbySync.cs`, each value
+      under 8 KB). A guest's Core never sends `/names` or `/board` (the mod answers 409) and forwards joins with
+      platform + user id; hide lists / red flags are checked on both sides. Chat lines go to the chat a chatter came
+      from (`origin`). Only the host gets Remove / Swap in the Chat app.
+- [ ] `!mug`: `mug_enabled` default **false**. Price is the `mug_cost` setting (commands.json `cost` stays 0: Core's
+      cost field only gates). Refund + chat line when the game refuses or doesn't answer within 30 s. Goons run on
+      the host only; their own names come back when the mugging ends.
+- [ ] Settings: everything but `bridge_url` / `bridge_token` is `"page": true` (Schedule I page, Settings tab).
 - [ ] Shift rotation (`rotate_after_deals`, `rotate_after_min`, `rotate_keep_subs`) defaults off; only moves
       chatters while someone waits; keeps their deals / spent. New `people` columns go in SCHEMA and ADDED_COLUMNS.
 - [ ] Stream alerts in the game are phone pop-ups (NotificationsManager), never text messages (conversations are saved).
@@ -34,6 +43,11 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] Console says "N customers found (M met)" with N matching the save (not just the met ones).
 - [ ] Phone shows the **Chat** app; its four tabs fill in; Remove (twice) and Swap change who has which customer.
 - [ ] With **Show stream alerts on the in-game phone** ticked, an Alerts-page test alert pops up on the phone and in the feed.
+- [ ] `!mug` (enabled, with points): goons come out of a nearby building, are called "<chatter>'s crew", and the
+      outcome line arrives; with a knocked-out player it refunds.
+- [ ] Co-op with two players: the guest sees the host's chatter names and Chat app lists; a guest chatter's
+      `!customer` gets a customer; a guest chatter's `!mug` hits the guest's player. Note whether order / deal
+      lines fire on the guest, the host, or both.
 
 ## Drop risks
 

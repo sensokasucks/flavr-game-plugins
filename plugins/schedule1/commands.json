@@ -9,6 +9,16 @@
     "cost": 0,
     "examples": ["!customer", "!customer leave"]
   },
+  "mug": {
+    "aliases": ["rob"],
+    "permission": "public",
+    "description": "Pay points to send cartel goons after the streamer in Schedule I (price and cooldown on the Schedule I page)",
+    "args": [],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!mug"]
+  },
   "topcustomers": {
     "aliases": ["bestcustomers"],
     "permission": "public",

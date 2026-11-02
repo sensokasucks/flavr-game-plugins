@@ -11,6 +11,8 @@
 //   Shared.cs          what the two threads share: the customer list, events, names to apply,
 //                      the phone app's board / feed and alerts waiting to be shown
 //   ChatApp.cs         the "Chat" phone app (customers, waiting list, top spenders, feed)
+//   Mugger.cs          !mug: cartel goons sent after a player (host only)
+//   LobbySync.cs       co-op: the host shares names / lists, clients forward joins and mugs
 //
 // Unity and game objects may only be used on the main thread, so the HTTP thread only reads and
 // writes Shared; OnUpdate below moves data between Shared and the game.
@@ -18,7 +20,7 @@
 using System;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.2.0", "sensokasucks",
+[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.3.0", "sensokasucks",
     "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
@@ -36,6 +38,9 @@ namespace FridgeSchedule1
 
         private BridgeServer _server;
         private CustomerWatcher _watcher;
+        private Mugger _mugger;
+        private LobbySync _lobby;
+        private bool _inWorld;                // a save is loaded (scene "Main")
         private float _nextRefresh;
 
         public override void OnInitializeMelon()
@@ -50,6 +55,8 @@ namespace FridgeSchedule1
                 description: "Optional shared secret; same text as 'Mod token' on Core's Schedule I card.");
 
             _watcher = new CustomerWatcher(LoggerInstance);
+            _mugger = new Mugger(LoggerInstance);
+            _lobby = new LobbySync(LoggerInstance, _watcher, _mugger);
             try
             {
                 _server = new BridgeServer(_bindAddress.Value, _port.Value, _token.Value, LoggerInstance);
@@ -65,19 +72,27 @@ namespace FridgeSchedule1
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             // "Main" is the playable world (a save is loaded); "Menu" is the title screen.
-            if (sceneName == "Main")
+            _inWorld = sceneName == "Main";
+            if (_inWorld)
                 _watcher.OnWorldLoaded();
             else
                 _watcher.OnWorldUnloaded();
+            _mugger.Clear();
             _nextRefresh = 0f;
         }
 
         public override void OnUpdate()
         {
             // Names Core sent since the last frame (POST /names), applied here on the main thread.
+            // On a co-op client the host's names come through LobbySync instead (BridgeServer refuses /names).
             var names = Shared.TakePendingNames();
             if (names != null)
                 _watcher.ApplyNames(names);
+
+            // A !mug or a client's join / leave from this player's Core, one per frame.
+            var request = Shared.TakeRequest();
+            if (request != null)
+                HandleRequest(request);
 
             // Stream alerts Core sent (POST /notify), one per frame, and the phone app's redraw.
             var notice = Shared.TakeNotice();
@@ -88,7 +103,37 @@ namespace FridgeSchedule1
             if (UnityEngine.Time.realtimeSinceStartup < _nextRefresh)
                 return;
             _nextRefresh = UnityEngine.Time.realtimeSinceStartup + RefreshEverySec;
+            if (_inWorld)
+                _lobby.Tick();     // before Refresh, so a client applies the host's latest names
             _watcher.Refresh();
+            _mugger.Tick();
+        }
+
+        // A request from this player's Core (BridgeServer POST /mug, /remote). On a co-op client every
+        // request goes to the host (LobbySync.Send); the host answers mugs in lobby data, which
+        // LobbySync turns into the same mug_result / mug_outcome events as below.
+        private void HandleRequest(CoreRequest r)
+        {
+            if (Shared.Role == "client")
+            {
+                _lobby.Send(r);
+                return;
+            }
+            if (r.type != "mug")
+                return;            // join / leave on the host: its own Core handles those
+            if (!_inWorld)
+            {
+                Shared.AddEvent("mug_result", new System.Collections.Generic.Dictionary<string, object>
+                    { ["mug"] = r.id, ["ok"] = false, ["msg"] = "no save is loaded" });
+                return;
+            }
+            var player = Il2CppScheduleOne.PlayerScripts.Player.Local;
+            var why = _mugger.Start(player, r.by, r.goons, outcome =>
+                Shared.AddEvent("mug_outcome", new System.Collections.Generic.Dictionary<string, object>
+                    { ["mug"] = r.id, ["outcome"] = outcome }));
+            Shared.AddEvent("mug_result", new System.Collections.Generic.Dictionary<string, object>
+                { ["mug"] = r.id, ["ok"] = why.Length == 0, ["msg"] = why });
+            Shared.AddFeed(why.Length == 0 ? $"{r.by} sent goons after you" : $"{r.by} tried to mug you: {why}");
         }
 
         // A stream alert as the game's own phone pop-up (top right, like "new message") plus a line in

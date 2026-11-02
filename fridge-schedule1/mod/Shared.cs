@@ -33,6 +33,8 @@ namespace FridgeSchedule1
         public string name;      // chatter name as shown in chat
         public string platform;  // twitch / youtube / kick
         public string customer;  // the customer's own name ("Kyle Cooley"); empty while waiting
+        public string npc;       // the customer's game id ("kyle_cooley"); empty while waiting.
+                                 // A client streamer's Core uses it to find its own chatters' customers.
         public int deals;
         public double spent;     // in-game dollars
     }
@@ -43,6 +45,22 @@ namespace FridgeSchedule1
         public List<BoardRow> named = new List<BoardRow>();
         public List<BoardRow> waiting = new List<BoardRow>();
         public List<BoardRow> top = new List<BoardRow>();
+    }
+
+    /// <summary>Something this player's Core asks the game for, handled on the main thread:
+    /// a mugging (POST /mug), or on a co-op client a chatter joining / leaving the host's list
+    /// (POST /remote). LobbySync.cs sends client requests to the host.</summary>
+    internal sealed class CoreRequest
+    {
+        public string type;       // "mug", "join" or "leave"
+        public long id;           // Core's own number for a mug; results come back with it
+        public string by;         // mug: the redeemer's name (put on the goons)
+        public int goons;         // mug: how many goons (Core's mug_goons setting)
+        public string platform;   // join / leave: the chatter (hide lists are checked on both sides)
+        public string userId;
+        public string username;
+        public string displayName;
+        public bool isSub;
     }
 
     /// <summary>A stream alert Core wants shown in the game (POST /notify): a phone pop-up plus a feed line.</summary>
@@ -78,6 +96,38 @@ namespace FridgeSchedule1
         private static readonly List<string> _feed = new List<string>();
         private static int _feedVersion;
         private static readonly Queue<Notice> _notices = new Queue<Notice>();
+
+        // Co-op (LobbySync.cs). Role is "host" (also when playing alone) or "client"; on a client the
+        // host's mod decides the names and the list, and this player's Core only forwards requests.
+        private const int MaxRequests = 20;    // Core requests waiting for the main thread
+        private static string _role = "host";
+        private static readonly Queue<CoreRequest> _requests = new Queue<CoreRequest>();
+
+        /// <summary>"host" or "client"; set by LobbySync every second, read by BridgeServer.</summary>
+        public static string Role
+        {
+            get { lock (Lock) return _role; }
+            set { lock (Lock) _role = value; }
+        }
+
+        /// <summary>HTTP thread (POST /mug, POST /remote): queue a request; false when the queue is full.</summary>
+        public static bool AddRequest(CoreRequest r)
+        {
+            lock (Lock)
+            {
+                if (_requests.Count >= MaxRequests)
+                    return false;
+                _requests.Enqueue(r);
+                return true;
+            }
+        }
+
+        /// <summary>Main thread (Core.OnUpdate): the next request, or null.</summary>
+        public static CoreRequest TakeRequest()
+        {
+            lock (Lock)
+                return _requests.Count > 0 ? _requests.Dequeue() : null;
+        }
 
         /// <summary>Main thread: the latest customer list (CustomerWatcher.Refresh).</summary>
         public static void SetCustomers(bool loaded, List<CustomerInfo> customers)

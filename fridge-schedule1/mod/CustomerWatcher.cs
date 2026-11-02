@@ -68,7 +68,12 @@ namespace FridgeSchedule1
             Shared.SetCustomers(false, new List<CustomerInfo>());
         }
 
-        /// <summary>Core's full set of wanted names (POST /names). Anyone not listed gets their own name back.</summary>
+        /// <summary>The names in force (npc id -> name): from this player's Core on the host, from the
+        /// host on a co-op client. LobbySync (host) shares them with the other players.</summary>
+        public IReadOnlyDictionary<string, WantedName> Wanted => _wanted;
+
+        /// <summary>Core's full set of wanted names (POST /names), or on a co-op client the host's
+        /// (LobbySync). Anyone not listed gets their own name back.</summary>
         public void ApplyNames(Dictionary<string, WantedName> names)
         {
             _wanted = names ?? new Dictionary<string, WantedName>();

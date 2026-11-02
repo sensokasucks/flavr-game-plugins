@@ -9,6 +9,13 @@
 //   POST /board                {"named": [...], "waiting": [...], "top": [...]} rows {"key", "name", "platform",
 //                              "customer", "deals", "spent"}: what the phone app lists -> {"success"}
 //   POST /notify               {"title", "text"}: a stream alert to pop up on the phone -> {"success"}
+//   POST /mug                  {"id", "by", "goons"}: send goons after this player -> {"success", "role"};
+//                              the answer comes as events "mug_result" {"mug", "ok", "msg"} and later
+//                              "mug_outcome" {"mug", "outcome": "won" | "lost" | "left"}
+//   POST /remote               {"type": "join" | "leave", "platform", "user_id", "username", "display_name",
+//                              "is_sub"}: co-op client only, passed to the host (LobbySync.cs)
+//   GET /customers also says "role" ("host" / "client") and "board" (the lists, the host's on a client).
+//   On a client, POST /names and /board answer 409: the host decides.
 //
 // Safety (same rules as the mock, mock/mock_server.py): listens on loopback only; everything but
 // /health needs the header X-Fridge-Core: 1 (Core always sends it); any request with a browser
@@ -99,11 +106,20 @@ namespace FridgeSchedule1
             if (req.HttpMethod == "GET" && path == "/customers")
             {
                 var (loaded, customers) = Shared.GetCustomers();
+                var board = Shared.GetBoard().board;
                 Json(ctx, 200, new Dictionary<string, object>
                 {
                     ["loaded"] = loaded,
                     ["boot"] = Shared.Boot,
                     ["source"] = "mod",
+                    // "client" = a co-op guest: the host decides names; plugin.py then only forwards
+                    ["role"] = Shared.Role,
+                    ["board"] = new Dictionary<string, object>
+                    {
+                        ["named"] = board.named.Select(RowJson).ToList(),
+                        ["waiting"] = board.waiting.Select(RowJson).ToList(),
+                        ["top"] = board.top.Select(RowJson).ToList(),
+                    },
                     ["customers"] = customers.Select(c => new Dictionary<string, object>
                     {
                         ["id"] = c.id, ["first"] = c.first, ["last"] = c.last,
@@ -118,6 +134,51 @@ namespace FridgeSchedule1
                 long.TryParse(req.QueryString["after"], out var after);
                 var (last, events) = Shared.EventsAfter(after);
                 Json(ctx, 200, new Dictionary<string, object> { ["boot"] = Shared.Boot, ["last"] = last, ["events"] = events });
+                return;
+            }
+
+            if (req.HttpMethod == "POST" && (path == "/names" || path == "/board") && Shared.Role == "client")
+            {
+                Json(ctx, 409, Error("this game is a co-op client: the host decides names"));
+                return;
+            }
+
+            if (req.HttpMethod == "POST" && (path == "/mug" || path == "/remote"))
+            {
+                CoreRequest r;
+                try
+                {
+                    using var doc = JsonDocument.Parse(ReadBody(req));
+                    var o = doc.RootElement;
+                    r = new CoreRequest
+                    {
+                        type = path == "/mug" ? "mug" : Str(o, "type"),
+                        id = o.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number ? id.GetInt64() : 0,
+                        by = Str(o, "by"),
+                        goons = o.TryGetProperty("goons", out var g) && g.ValueKind == JsonValueKind.Number ? g.GetInt32() : 2,
+                        platform = Str(o, "platform"),
+                        userId = Str(o, "user_id"),
+                        username = Str(o, "username"),
+                        displayName = Str(o, "display_name"),
+                        isSub = o.TryGetProperty("is_sub", out var s) && s.ValueKind == JsonValueKind.True,
+                    };
+                }
+                catch (Exception ex)
+                {
+                    Json(ctx, 400, Error("bad body: " + ex.Message));
+                    return;
+                }
+                if (r.type != "mug" && r.type != "join" && r.type != "leave")
+                {
+                    Json(ctx, 400, Error("type must be join or leave"));
+                    return;
+                }
+                if (!Shared.AddRequest(r))       // Core.OnUpdate handles it next frame
+                {
+                    Json(ctx, 429, Error("too many requests waiting"));
+                    return;
+                }
+                Json(ctx, 200, new Dictionary<string, object> { ["success"] = true, ["role"] = Shared.Role });
                 return;
             }
 
@@ -191,6 +252,13 @@ namespace FridgeSchedule1
             Json(ctx, 404, Error("not found"));
         }
 
+        // One board row for GET /customers (same fields as POST /board).
+        private static Dictionary<string, object> RowJson(BoardRow r) => new Dictionary<string, object>
+        {
+            ["key"] = r.key, ["name"] = r.name, ["platform"] = r.platform, ["customer"] = r.customer,
+            ["npc"] = r.npc, ["deals"] = r.deals, ["spent"] = r.spent,
+        };
+
         // The request body as text ("{}" when empty); refuses bodies over MaxBodyBytes.
         private static string ReadBody(HttpListenerRequest req)
         {
@@ -217,6 +285,7 @@ namespace FridgeSchedule1
                     name = Str(r, "name"),
                     platform = Str(r, "platform"),
                     customer = Str(r, "customer"),
+                    npc = Str(r, "npc"),
                     deals = r.TryGetProperty("deals", out var d) && d.ValueKind == JsonValueKind.Number ? d.GetInt32() : 0,
                     spent = r.TryGetProperty("spent", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetDouble() : 0,
                 });

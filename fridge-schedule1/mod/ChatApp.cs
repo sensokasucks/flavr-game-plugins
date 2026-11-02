@@ -6,7 +6,8 @@
 // Core.OnUpdate calls Tick() every frame; the lists are only rebuilt while the app is open and
 // something changed (Shared's board / feed version numbers, or a tab press).
 //
-// Data: the lists come from Core (POST /board -> Shared.SetBoard; built by plugin.py's board()),
+// Data: the lists come from Core (POST /board -> Shared.SetBoard; built by plugin.py's board()), or
+// in a friend's co-op game from the host's mod (LobbySync.cs; no Remove / Swap buttons then),
 // the feed from CustomerWatcher and Core.ShowNotice (Shared.AddFeed). The Remove and Swap buttons
 // don't change anything here: they add "app_remove" / "app_swap" events that Core reads with
 // GET /events and acts on (plugin.py handle_event), then sends the new names and board back.
@@ -165,6 +166,8 @@ namespace FridgeSchedule1
             var t = UIFactory.Text("Text", $"{r.name} ({r.platform})  ->  {r.customer}\n{r.deals} deals, ${r.spent:0}",
                 row.transform, 18, TextAnchor.MiddleLeft);
             t.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+            if (Shared.Role == "client")
+                return;          // co-op guest: the list is the host's (LobbySync.cs), so only the host edits it
 
             bool confirming = _confirmKey == r.key;
             var (rgo, rbtn, _) = UIFactory.ButtonWithLabel("Remove", confirming ? "Sure?" : "Remove", row.transform,

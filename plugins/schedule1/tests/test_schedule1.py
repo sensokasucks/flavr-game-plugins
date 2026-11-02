@@ -298,6 +298,106 @@ class MockModTests(unittest.TestCase):
 
         asyncio.run(go())
 
+    def test_mug(self):
+        """!mug: off by default; costs points; the game's answer is said in chat; refused = refunded."""
+        async def go():
+            mgr, plugin, replies, store = await self.started()
+            zack = ChatUser(platform=Platform.TWITCH, id="1", username="zackfan99", display_name="ZackFan99")
+            await plugin.tick()                                   # connected, save loaded
+            self.assertIn("switched off", (await plugin.execute(self.req(zack, "!mug")))["reply"])
+
+            self.cfg["schedule1"].update(mug_enabled=True, mug_cost=100, mug_cooldown_sec=60, mug_goons=3)
+            uid = await store.get_or_create_user("twitch", "1", "zackfan99", "ZackFan99")
+            self.assertIn("costs 100 points", (await plugin.execute(self.req(zack, "!mug")))["reply"])
+            await store.adjust_points(uid, 250, "test", "test")
+
+            out = await plugin.execute(self.req(zack, "!mug"))
+            self.assertIn("paid 100 points", out["reply"])
+            self.assertEqual((self.world.mugs[-1]["by"], self.world.mugs[-1]["goons"]), ("ZackFan99", 3))
+            await plugin.tick()
+            self.assertIn("ZackFan99's crew is coming for the streamer!", replies)
+            self.world.mug_end(self.world.mugs[-1]["id"], "won")
+            await plugin.tick()
+            self.assertIn("The streamer fought off ZackFan99's crew!", replies)
+            self.assertIn("resting", (await plugin.execute(self.req(zack, "!mug")))["reply"])   # cooldown
+
+            # the game refuses: points come back and the cooldown is lifted
+            plugin._mug_ready_at = 0
+            self.world.mug_refusal = "the player can't be mugged right now"
+            await plugin.execute(self.req(zack, "!mug"))
+            await plugin.tick()
+            self.assertIn("@ZackFan99 no mugging: the player can't be mugged right now. Points refunded.", replies)
+            self.assertEqual((await store.get_user(uid))["points"], 150)
+            self.assertEqual(plugin._mug_ready_at, 0)
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
+    def test_coop_client_forwards_to_the_host(self):
+        """In a friend's co-op game the host decides: we forward joins and copy where our chatters ended up."""
+        async def go():
+            self.world.role = "client"
+            self.world.board = {"named": [{"key": "twitch:1", "npc": "austin_steiner", "name": "ZackFan99",
+                                           "platform": "twitch", "customer": "Austin Steiner", "deals": 0, "spent": 0}],
+                                "waiting": [], "top": [{"key": "kick:9", "name": "HostChatter", "platform": "kick",
+                                                        "customer": "", "npc": "", "deals": 4, "spent": 300}]}
+            mgr, plugin, replies, _store = await self.started()
+            early = ChatUser(platform=Platform.KICK, id="3", username="early")
+            await plugin.execute(self.req(early, "!customer"))     # before Core knew it's a guest
+            await plugin.tick()
+            self.assertEqual(self.world.remote_requests[-1]["username"], "early")   # handed over on the switch
+            zack = ChatUser(platform=Platform.TWITCH, id="1", username="zackfan99", display_name="ZackFan99")
+            out = await plugin.execute(self.req(zack, "!customer"))
+            self.assertIn("co-op game's customer list", out["reply"])
+            self.assertEqual(self.world.remote_requests[-1]["type"], "join")
+            self.assertEqual(self.world.remote_requests[-1]["user_id"], "1")
+            await plugin.tick()
+            self.assertEqual(plugin.role, "client")
+            self.assertEqual(self.world.names, {})                # we never name anyone ourselves
+            self.assertEqual((await plugin.roster.get("twitch:1"))["npc_id"], "austin_steiner")
+            self.assertIn("HostChatter", (await plugin.execute(self.req(zack, "!topcustomers")))["reply"])
+
+            # our chatter's customer orders in the shared game: our chat hears it
+            replies.clear()
+            self.world.order("austin_steiner", deal_after=60)
+            await plugin.tick()
+            self.assertTrue(any(r.startswith("ZackFan99 wants") for r in replies), replies)
+
+            await plugin.execute(self.req(zack, "!customer leave"))
+            self.assertEqual(self.world.remote_requests[-1]["type"], "leave")
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
+    def test_coop_host_takes_friends_chatters(self):
+        """Host: a co-op friend's chatter gets a customer; our chat doesn't announce them; our hide list holds."""
+        async def go():
+            self.cfg["avatars"]["hide"] = ["kick:sneaky"]
+            mgr, plugin, replies, _store = await self.started()
+            await plugin.tick()
+            replies.clear()
+            self.world.remote_event("remote_join", **{"from": "76561198000000001", "player": "Friend",
+                                                      "platform": "kick", "user_id": "5", "username": "bea",
+                                                      "display_name": "Bea", "is_sub": False})
+            self.world.remote_event("remote_join", **{"from": "76561198000000001", "player": "Friend",
+                                                      "platform": "kick", "user_id": "6", "username": "sneaky",
+                                                      "display_name": "Sneaky", "is_sub": False})
+            await plugin.tick()                                   # events -> roster, wakes the sync
+            await plugin.tick()                                   # sync names them
+            bea = await plugin.roster.get("kick:5")
+            self.assertEqual(bea["origin"], "76561198000000001")
+            self.assertTrue(bea["npc_id"])
+            self.assertIsNone(await plugin.roster.get("kick:6"))
+            self.assertIn("Bea", [n["first"] for n in self.world.names.values()])
+            self.assertFalse(any("Bea" in r for r in replies), replies)   # the friend's Core says it
+            self.assertEqual(self.world.board["named"][0]["npc"], bea["npc_id"])
+            self.world.remote_event("remote_leave", platform="kick", user_id="5", username="bea")
+            await plugin.tick()
+            self.assertIsNone(await plugin.roster.get("kick:5"))
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
     def test_stream_alerts_on_the_phone(self):
         from core.alerts import build_alert
 

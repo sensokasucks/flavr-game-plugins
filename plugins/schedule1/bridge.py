@@ -9,6 +9,11 @@ Both answer on ``schedule1.bridge_url`` (default http://127.0.0.1:3857):
                              (type "app_remove" / "app_swap" with "key": buttons in the phone app)
   POST /board                {"named", "waiting", "top"}: lists for the in-game phone app (plugin.board())
   POST /notify               {"title", "text"}: a stream alert to pop up on the in-game phone
+  POST /mug                  {"id", "by", "goons"}: !mug; answers arrive as mug_result / mug_outcome events
+  POST /remote               {"type": "join" | "leave", chatter fields}: co-op client -> host's list
+
+GET /customers also carries "role" ("host", or "client" in someone else's co-op game: the host's
+mod decides names then, and plugin.py only forwards joins) and "board" (the shared lists).
 
 "boot" is a random id the mod picks each time the game starts; when it changes, its event numbers
 start again at 1 and plugin.py re-sends the names. Every request carries ``X-Fridge-Core: 1``
@@ -67,6 +72,18 @@ class Bridge:
     async def set_board(self, board: dict) -> dict:
         """What the in-game phone app lists; plugin.py sends it after a sync when it changed."""
         return await self._call("POST", "/board", json=board)
+
+    async def mug(self, mug_id: int, by: str, goons: int) -> dict:
+        """!mug: send goons after this streamer's player. The answer comes later as events
+        "mug_result" {"mug", "ok", "msg"} and "mug_outcome" {"mug", "outcome"} (plugin.py handle_event)."""
+        return await self._call("POST", "/mug", json={"id": int(mug_id), "by": by, "goons": int(goons)})
+
+    async def remote(self, kind: str, platform: str, user_id: str, username: str, display_name: str,
+                     is_sub: bool = False) -> dict:
+        """Co-op client: pass a chatter's join / leave ("join" / "leave") to the host's list."""
+        return await self._call("POST", "/remote", json={
+            "type": kind, "platform": platform, "user_id": user_id, "username": username,
+            "display_name": display_name, "is_sub": bool(is_sub)})
 
     async def notify(self, title: str, text: str) -> dict:
         """Pop a stream alert up on the in-game phone (plugin.py _on_alert)."""

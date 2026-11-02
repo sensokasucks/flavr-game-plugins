@@ -10,6 +10,10 @@ Lets you test Stream Core's Schedule I plugin (plugins/schedule1) without Schedu
                              World.app_button() fakes those for tests)
   POST /board                the lists Core wants in the phone app (kept in World.board, printed)
   POST /notify               a stream alert for the phone (kept in World.notices, printed)
+  POST /mug                  !mug: answers with a "mug_result" event at once (World.mug_refusal refuses);
+                             World.mug_end() fakes the "mug_outcome"
+  POST /remote               co-op client join / leave (kept in World.remote_requests); World.role = "client"
+                             makes the mock act as a guest in a friend's game
 
 Fake world: 16 customers, 6 already met. Every ``--every`` seconds (default 15) a met customer
 texts an order, and the deal goes through a few seconds later; now and then you meet someone new.
@@ -69,6 +73,12 @@ class World:
         self.pending: list[tuple[float, dict]] = []   # (due time, deal event) for orders in flight
         self.board: dict = {"named": [], "waiting": [], "top": []}   # last POST /board
         self.notices: list[dict] = []                 # every POST /notify, oldest first
+        # co-op: "host" like a game hosting / played alone, "client" like a guest in a friend's game
+        # (then the board is the host's, set by tests, and /names + /board answer 409 like the real mod)
+        self.role = "host"
+        self.mugs: list[dict] = []                    # every POST /mug
+        self.mug_refusal = ""                         # set to refuse the next muggings with this text
+        self.remote_requests: list[dict] = []         # every POST /remote (client joins / leaves)
 
     def shown(self, cust: dict) -> str:
         """The name the game would show now (Core's name, else the customer's own)."""
@@ -84,7 +94,7 @@ class World:
 
     def snapshot(self) -> dict:
         with self.lock:
-            return {"loaded": True, "boot": self.boot, "source": "mock",
+            return {"loaded": True, "boot": self.boot, "source": "mock", "role": self.role, "board": self.board,
                     "customers": [dict(c, shown=self.shown(c)) for c in self.customers]}
 
     def set_names(self, names: dict) -> dict:
@@ -115,7 +125,34 @@ class World:
             self.notices.append({"title": str(body.get("title") or ""), "text": text})
         return 200, {"success": True}
 
+    def mug(self, body: dict) -> dict:
+        """POST /mug: like the real mod, answer with a "mug_result" event (goons sent, or why not)."""
+        with self.lock:
+            self.mugs.append(body)
+            ok = not self.mug_refusal
+            self.add_event({"type": "mug_result", "mug": int(body.get("id") or 0), "ok": ok,
+                            "msg": "" if ok else self.mug_refusal})
+        return {"success": True, "role": self.role}
+
+    def remote(self, body: dict) -> tuple[int, dict]:
+        """POST /remote: a co-op client's join / leave for the host (kept for tests)."""
+        if body.get("type") not in ("join", "leave"):
+            return 400, {"success": False, "error": "type must be join or leave"}
+        with self.lock:
+            self.remote_requests.append(body)
+        return 200, {"success": True, "role": self.role}
+
     # ---- the fake game's activity (also called straight from tests)
+
+    def mug_end(self, mug_id: int, outcome: str) -> dict:
+        """How a mugging ended: "won" (streamer beat the goons), "lost" or "left"."""
+        with self.lock:
+            return self.add_event({"type": "mug_outcome", "mug": int(mug_id), "outcome": outcome})
+
+    def remote_event(self, kind: str, **fields) -> dict:
+        """Host: a co-op friend's chatter joined / left in the friend's chat ("remote_join" / "remote_leave")."""
+        with self.lock:
+            return self.add_event({"type": kind, **fields})
 
     def app_button(self, kind: str, key: str) -> dict:
         """The streamer pressed Remove ("app_remove") or Swap ("app_swap") in the phone app."""
@@ -204,8 +241,11 @@ def make_handler(world: World, token: str = ""):
             if not self._allowed():
                 return
             path = urlparse(self.path).path
-            if path not in ("/names", "/board", "/notify"):
+            if path not in ("/names", "/board", "/notify", "/mug", "/remote"):
                 self._send(404, {"success": False, "error": "not found"})
+                return
+            if path in ("/names", "/board") and world.role == "client":
+                self._send(409, {"success": False, "error": "this game is a co-op client: the host decides names"})
                 return
             length = min(int(self.headers.get("Content-Length") or 0), 256 * 1024)
             try:
@@ -218,6 +258,13 @@ def make_handler(world: World, token: str = ""):
                 b = world.board
                 print(f"phone app: {len(b['named'])} named, {len(b['waiting'])} waiting")
                 self._send(200, result)
+            elif path == "/mug":
+                print(f"mugging asked by {body.get('by')} ({body.get('goons')} goons)")
+                self._send(200, world.mug(body))
+            elif path == "/remote":
+                code, result = world.remote(body)
+                print(f"co-op {body.get('type')}: {body.get('username')} ({body.get('platform')})")
+                self._send(code, result)
             elif path == "/notify":
                 code, result = world.notify(body)
                 if code == 200:

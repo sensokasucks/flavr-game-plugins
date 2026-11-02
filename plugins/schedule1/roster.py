@@ -33,7 +33,9 @@ CREATE TABLE IF NOT EXISTS people (
     spent        REAL NOT NULL DEFAULT 0,   -- in-game dollars paid in completed deals
     last_deal_at REAL,
     shift_deals  INTEGER NOT NULL DEFAULT 0, -- deals on the current customer (rotate_after_deals)
-    is_sub       INTEGER NOT NULL DEFAULT 0  -- subscriber / member when last seen (rotate_keep_subs)
+    is_sub       INTEGER NOT NULL DEFAULT 0, -- subscriber / member when last seen (rotate_keep_subs)
+    origin       TEXT NOT NULL DEFAULT ''    -- co-op host: Steam id of the friend whose chat they came
+                                             -- from ("" = this streamer's own chat)
 );
 """
 
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS people (
 ADDED_COLUMNS = [
     "ALTER TABLE people ADD COLUMN shift_deals INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE people ADD COLUMN is_sub INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE people ADD COLUMN origin TEXT NOT NULL DEFAULT ''",
 ]
 
 # Letters, digits and a few safe marks. The game's font may not have emoji or other scripts,
@@ -187,7 +190,7 @@ class Roster:
         )
 
     async def join(self, platform: str, user_id: str, username: str, display_name: str,
-                   is_sub: Optional[bool] = None) -> tuple[dict, bool]:
+                   is_sub: Optional[bool] = None, origin: str = "") -> tuple[dict, bool]:
         """Add a chatter to the waiting list. Returns (row, True) when new, (existing row, False) otherwise.
 
         An existing row only gets its display name and subscriber flag refreshed (people rename
@@ -203,10 +206,10 @@ class Roster:
                 row = await self.get(key)
             return row, False
         await self.db.execute(
-            "INSERT INTO people (key, platform, user_id, username, display_name, joined_at, is_sub)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO people (key, platform, user_id, username, display_name, joined_at, is_sub, origin)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (key, platform.lower(), str(user_id or ""), username.lower(), display_name or username, time.time(),
-             int(bool(is_sub))),
+             int(bool(is_sub)), str(origin or "")),
         )
         return await self.get(key), True
 
@@ -236,6 +239,15 @@ class Roster:
             "SELECT * FROM people WHERE platform = ? AND (username = ? OR LOWER(display_name) = ?)",
             (str(platform or "").lower(), n, n),
         )
+
+    async def mirror(self, npc_by_key: dict[str, str]) -> None:
+        """Co-op client: copy the host's assignments for our own chatters (key -> npc id; anyone not
+        listed is waiting). Called from plugin.py sync() with the host's board."""
+        for row in await self.all():
+            npc = npc_by_key.get(row["key"]) or None
+            if npc != row["npc_id"]:
+                await self.db.execute("UPDATE people SET npc_id = ?, assigned_at = ? WHERE key = ?",
+                                      (npc, time.time() if npc else None, row["key"]))
 
     async def assign(self, pairs: list[tuple[str, str]]) -> None:
         """Store plan_assignments() results."""

@@ -24,6 +24,30 @@ What happens:
 
 Renaming is only on your PC: co-op friends see the normal names, and nothing is written into your save.
 
+## !mug: chat sends goons after you
+
+Off by default; switch it on in the **Mugging** box on the Schedule I page (Games). A chatter pays the
+price in Core points and cartel goons come out of the building nearest your player and attack. On your
+screen they're called "zackfan99's crew". Chat hears when they're coming and how it ended (you fought them
+off, they knocked you out, or they gave up after 3 minutes). One mugging per cooldown for the whole chat.
+If the game can't do it (no save loaded, you're already knocked out or arrested, no goons free) or doesn't
+answer within 30 s, the points go back and chat is told why.
+
+## Co-op: everyone has the mod
+
+Every player in the lobby runs the mod (and their own Stream Core, if they stream). The **host's** game
+decides: its Core assigns customers, and its mod shares the chatter names and the Chat app's lists with the
+other players through Steam lobby data, so everyone sees the same names.
+
+- A friend's chatters can still type `!customer`: the friend's Core passes the join to the host's list
+  (through the friend's mod). Hide lists and red flags are checked on both sides.
+- Chat lines about a chatter go to the chat they came from: the friend's chat hears about the friend's chatters.
+- On a friend's game the Chat app shows the host's lists without Remove / Swap (only the host edits them);
+  the Feed and stream alert pop-ups stay each player's own.
+- `!mug` from a friend's chat hits the friend's player: the host's mod sends the goons. Points and cooldown
+  stay in the friend's Core, which refunds if the host's game refuses.
+- Playing alone counts as hosting.
+
 ## Shifts: sharing customers when the waiting list is long
 
 Off by default. On Core's Schedule I card:
@@ -114,7 +138,15 @@ and checks `X-Fridge-Token` when a Token is set.
 | `GET /events?after=N` | `{"boot", "last", "events": [...]}`; `type` is `contract` (order texted), `deal` (went through) or `unlocked` (met someone new), with `id`, `name`, `qty`, `products`, `payment`; or `app_remove` / `app_swap` with `key` (phone app buttons) |
 | `POST /board` | `{"named", "waiting", "top"}`, rows `{"key", "name", "platform", "customer", "deals", "spent"}`: what the phone app lists |
 | `POST /notify` | `{"title", "text"}`: a stream alert to pop up on the phone |
+| `POST /mug` | `{"id", "by", "goons"}`: !mug; answered by events `mug_result` (`mug`, `ok`, `msg`) and later `mug_outcome` (`mug`, `outcome`: `won` / `lost` / `left`) |
+| `POST /remote` | `{"type": "join" / "leave", "platform", "user_id", "username", "display_name", "is_sub"}`: co-op guest only, passed to the host (whose Core gets `remote_join` / `remote_leave` events) |
+
+`GET /customers` also has `role` (`host`, or `client` when this game is a guest in a friend's lobby) and
+`board` (the Chat app's lists; the host's on a client). On a client `POST /names` and `/board` answer 409.
+Co-op data between the mods travels as Steam lobby data (`fs1.names`, `fs1.board`, `fs1.res` from the host,
+`fs1.req` member data from each guest), see `mod/LobbySync.cs`.
 
 `boot` changes every time the game starts (event numbers start again at 1).
 Code: `mod/Core.cs` (start, main-thread loop), `mod/CustomerWatcher.cs` (game side), `mod/BridgeServer.cs` (HTTP),
-`mod/Shared.cs` (what the two threads share), `mod/ChatApp.cs` (the phone app).
+`mod/Shared.cs` (what the two threads share), `mod/ChatApp.cs` (the phone app), `mod/Mugger.cs` (!mug),
+`mod/LobbySync.cs` (co-op sharing).

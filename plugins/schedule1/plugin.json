@@ -1,7 +1,7 @@
 {
   "id": "schedule1",
   "name": "Schedule I",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "core_api": 2,
   "kind": "python",
   "entry": "plugin:Schedule1Customers",
@@ -28,6 +28,10 @@
     "rotate_after_deals": 0,
     "rotate_after_min": 0,
     "rotate_keep_subs": false,
+    "mug_enabled": false,
+    "mug_cost": 500,
+    "mug_cooldown_sec": 300,
+    "mug_goons": 2,
     "alerts_in_game": false,
     "alert_kinds": []
   },
@@ -69,6 +73,12 @@
      "help": "Follows, subs, raids, tips ... pop up on your phone in Schedule I and go into the Chat app's feed. The Alerts page's test buttons work too."},
     {"key": "alert_kinds", "page": true, "group": "Alerts on the phone", "label": "Which alerts", "type": "list",
      "help": "Empty = all of them. Or pick kinds: follow, subscribe, resub, gift, raid, host, bits, superchat, donation, member, ..."},
+    {"key": "mug_enabled", "page": true, "group": "Mugging", "label": "Chat can mug you (!mug)", "type": "checkbox",
+     "help": "A chatter pays points and cartel goons come out of the nearest building after you. In co-op it hits your own player."},
+    {"key": "mug_cost", "page": true, "group": "Mugging", "label": "Price (points)", "type": "number", "min": 0, "step": 50,
+     "help": "Refunded when the game can't do it (no save loaded, you're knocked out, no goons free)."},
+    {"key": "mug_cooldown_sec", "page": true, "group": "Mugging", "label": "Cooldown for the whole chat (s)", "type": "number", "min": 0, "step": 30},
+    {"key": "mug_goons", "page": true, "group": "Mugging", "label": "Goons per mugging", "type": "number", "min": 1, "max": 4, "step": 1},
     {"key": "sync_sec", "page": true, "group": "Timing", "label": "Check the game's customers every (s)", "type": "number", "min": 2, "step": 1},
     {"key": "poll_sec", "page": true, "group": "Timing", "label": "Check for orders / deals every (s)", "type": "number", "min": 0.5, "step": 0.5}
   ]

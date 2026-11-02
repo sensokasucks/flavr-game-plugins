@@ -37,6 +37,8 @@ log = logging.getLogger("plugins.schedule1")
 
 RED_FLAG_REFRESH_SEC = 30     # how often the red-flag list is re-read from Core's database
 BOARD_TOP = 5                 # top spenders listed in the phone app
+MUG_ANSWER_SEC = 30           # !mug: refund when the game hasn't said "goons sent" by then
+MUG_FORGET_SEC = 600          # !mug: stop waiting for the outcome (the mod gives up after 180 s)
 # Alert kinds sent to the game when ``alert_kinds`` is empty: every kind in core/alerts.py KINDS
 # except "flag" (custom chat flags are a moderation tool, not a celebration).
 ALERT_KINDS_SKIPPED_BY_DEFAULT = {"flag"}
@@ -90,6 +92,13 @@ class Schedule1Customers(BasePlugin):
         self._red: set[tuple[str, str]] = set()   # (platform, user id or lower name) red-flagged
         self._red_at = 0.0
         self._flagged_now: set[str] = set()   # person keys hidden by a custom flag this session
+        # co-op: "host" (also playing alone) or "client" (in a friend's game: their mod decides names,
+        # we only forward our chatters' joins / leaves and keep our own copy for announcements)
+        self.role = "host"
+        self._board_in: dict = {}             # GET /customers "board" (the host's lists on a client)
+        # !mug: Core's id -> {"uid", "cost", "who", "platform", "at", "answered"} until the game answers
+        self._mugs: dict[int, dict] = {}
+        self._mug_ready_at = 0.0              # time.monotonic() when the next !mug may start
         self.connected = False
         self.last_error = ""
 
@@ -161,6 +170,7 @@ class Schedule1Customers(BasePlugin):
                 self._next_sync = now + self._num("sync_sec", 10, 2)
                 await self.sync()
             await self.poll_events()
+            await self._expire_mugs()
             self.connected, self.last_error = True, ""
         except BridgeError as exc:
             if self.connected or not self.last_error:
@@ -214,10 +224,30 @@ class Schedule1Customers(BasePlugin):
         data = await self.bridge.customers()
         self._loaded = bool(data.get("loaded"))
         self._customers = [c for c in (data.get("customers") or []) if isinstance(c, dict) and c.get("id")]
+        role = "client" if data.get("role") == "client" else "host"
+        if role != self.role:
+            log.info("Schedule I: %s", "in a friend's co-op game: their game decides the customers"
+                     if role == "client" else "this game decides the customers")
+            self.role = role
+            self._sent = self._board_sent = None
+            if role == "client":
+                # chatters who joined before we knew: hand them to the host's list too
+                for r in await self.roster.all():
+                    await self._forward("join", r["platform"], r["user_id"], r["username"], r["display_name"],
+                                        bool(r["is_sub"]))
+        self._board_in = data.get("board") or {}
         await self._refresh_red_flags()
         gone = await self.roster.remove_where(lambda r: not self._row_hidden(r))
         if gone:
             log.info("Schedule I: took %d hidden / red-flagged chatter(s) off the customer list", len(gone))
+            if self.role == "client":
+                for r in gone:                # take them off the host's list too
+                    await self.bridge.remote("leave", r["platform"], r["user_id"], r["username"], r["display_name"])
+        if self.role == "client":
+            # The host assigns; we only copy where our own chatters ended up (for chat lines).
+            await self.roster.mirror({str(r.get("key")): str(r.get("npc") or "")
+                                      for r in self._board_in.get("named") or [] if r.get("key")})
+            return
         if not self._loaded:
             return                            # main menu: nothing to name yet
         s = self._s()
@@ -265,6 +295,7 @@ class Schedule1Customers(BasePlugin):
             return {"key": r["key"], "name": clean_name(r["display_name"], r["username"]),
                     "platform": r["platform"],
                     "customer": f"{cust.get('first', '')} {cust.get('last', '')}".strip() if cust else "",
+                    "npc": r["npc_id"] or "",     # a co-op client's Core maps its chatters with it
                     "deals": int(r["deals"] or 0), "spent": float(r["spent"] or 0)}
 
         named = [row(r, by_id[r["npc_id"]]) for r in people if r["npc_id"] in by_id]
@@ -289,17 +320,23 @@ class Schedule1Customers(BasePlugin):
             who = clean_name(row["display_name"], row["username"])
             old = rotated.pop(npc, None)
             if old is None:
-                await self._say(row["platform"], f"{who} is now one of the streamer's customers in Schedule I.")
+                await self._say_to(row, f"{who} is now one of the streamer's customers in Schedule I.")
                 continue
             cust = by_id.get(npc) or {}
             own = f"{cust.get('first', '')} {cust.get('last', '')}".strip() or "their customer"
             text = f"{clean_name(old['display_name'], old['username'])}'s shift is over, {who} takes over {own}."
-            await self._say(row["platform"], text)
-            if old["platform"] != row["platform"]:
-                await self._say(old["platform"], text)
+            await self._say_to(row, text)
+            if old["platform"] != row["platform"] or old.get("origin") != row.get("origin"):
+                await self._say_to(old, text)
         for old in rotated.values():          # shift ended but nobody took that customer (max_named)
-            await self._say(old["platform"], f"{clean_name(old['display_name'], old['username'])}'s shift is over; "
-                                             f"back on the waiting list.")
+            await self._say_to(old, f"{clean_name(old['display_name'], old['username'])}'s shift is over; "
+                                    f"back on the waiting list.")
+
+    async def _say_to(self, row: dict, text: str) -> None:
+        """A chat line about this chatter, in their own chat. Chatters who joined from a co-op friend's
+        chat (``origin`` set) are skipped: the friend's Core says it there."""
+        if not row.get("origin"):
+            await self._say(row["platform"], text)
 
     async def poll_events(self) -> None:
         """Handle the mod's new events. A new mod session (boot) starts from its latest event, not its history."""
@@ -333,6 +370,12 @@ class Schedule1Customers(BasePlugin):
         if kind in ("app_remove", "app_swap"):
             await self._app_button(kind, str(ev.get("key") or ""))
             return
+        if kind in ("remote_join", "remote_leave"):
+            await self._remote(kind, ev)
+            return
+        if kind in ("mug_result", "mug_outcome"):
+            await self._mug_answer(kind, ev)
+            return
         if kind == "deal":
             row = await self.roster.record_deal(npc, float(ev.get("payment") or 0))
             if self._num("rotate_after_deals", 0, 0) > 0:
@@ -348,10 +391,120 @@ class Schedule1Customers(BasePlugin):
                                       "platform": row["platform"], "qty": ev.get("qty"),
                                       "products": ev.get("products") or [], "payment": ev.get("payment")})
         if kind == "contract" and s.get("announce_orders", True):
-            await self._say(row["platform"], f"{who} wants {order_text(ev)} for {money(ev.get('payment'))}.")
+            await self._say_to(row, f"{who} wants {order_text(ev)} for {money(ev.get('payment'))}.")
         elif kind == "deal" and s.get("announce_deals", True):
-            await self._say(row["platform"], f"{who} bought {order_text(ev)} for {money(ev.get('payment'))} "
-                                             f"(deal #{row['deals']}).")
+            await self._say_to(row, f"{who} bought {order_text(ev)} for {money(ev.get('payment'))} "
+                                    f"(deal #{row['deals']}).")
+
+    # ------------------------------------------------------------------ co-op
+
+    async def _remote(self, kind: str, ev: dict) -> None:
+        """Host: a co-op friend's chatter typed !customer (or leave) in the friend's chat; their mod
+        passed it here (mod LobbySync.cs, event "remote_join" / "remote_leave"). Our own hide list and
+        red flags apply too; the friend's Core already checked theirs. ``origin`` remembers whose chat
+        they came from, so chat lines about them are left to the friend's Core (_say_to)."""
+        plat = str(ev.get("platform") or "").lower()
+        if plat not in {p.value for p in Platform}:
+            return
+        uid, uname, shown = str(ev.get("user_id") or ""), str(ev.get("username") or ""), str(ev.get("display_name") or "")
+        if not uname:
+            return
+        key = person_key(plat, uid, uname)
+        if kind == "remote_leave":
+            if await self.roster.leave(key):
+                self._wake.set()
+            return
+        if self.is_hidden(plat, uid, uname, shown):
+            return
+        _row, new = await self.roster.join(plat, uid, uname, shown, is_sub=bool(ev.get("is_sub")),
+                                           origin=str(ev.get("from") or "co-op"))
+        if new:
+            log.info("Schedule I: %s joined from %s's chat", clean_name(shown, uname), ev.get("player") or "a co-op friend")
+            self._wake.set()
+
+    # ------------------------------------------------------------------ !mug
+
+    async def _mug(self, req: ExecuteRequest) -> dict:
+        """!mug: a chatter pays ``mug_cost`` points to send ``mug_goons`` cartel goons after the streamer.
+
+        Off unless ``mug_enabled``. One mugging per ``mug_cooldown_sec`` for the whole chat. The mod
+        answers later (events "mug_result" then "mug_outcome", _mug_answer); when the game refuses or
+        doesn't answer within MUG_ANSWER_SEC, the points go back. In a co-op game the host's mod
+        runs it on this streamer's player (mod LobbySync.cs).
+        """
+        s, u = self._s(), req.user
+        plat = req.platform.value if hasattr(req.platform, "value") else str(req.platform)
+        who = clean_name(u.display_name, u.username)
+        if not s.get("mug_enabled"):
+            return {"success": True, "reply": "Mugging the streamer is switched off."}
+        if self.is_hidden(plat, u.id, u.username, u.display_name) or not who:
+            return {"success": True}          # say nothing to hidden chatters
+        if not self.connected or not self._loaded:
+            return {"success": True, "reply": f"@{who} the game isn't running, nobody to mug."}
+        wait = self._mug_ready_at - time.monotonic()
+        if wait > 0:
+            return {"success": True, "reply": f"@{who} the goons are resting, try again in {int(wait) + 1}s."}
+        cost = int(self._num("mug_cost", 500, 0))
+        store = getattr(self.ctx, "store", None)
+        uid = None
+        if cost > 0:
+            if store is None:
+                return {"success": False, "error": "points are not available"}
+            uid = await store.get_or_create_user(plat, u.id, u.username, u.display_name)
+            paid, balance = await store.spend_points(uid, cost, 1, "!mug (Schedule I)", "schedule1")
+            if not paid:
+                return {"success": True, "reply": f"@{who} a mugging costs {cost} points, you have {balance}."}
+        mug_id = int(time.time() * 1000)
+        self._mugs[mug_id] = {"uid": uid, "cost": cost, "who": who, "platform": plat,
+                              "at": time.monotonic(), "answered": False}
+        self._mug_ready_at = time.monotonic() + self._num("mug_cooldown_sec", 300, 0)
+        try:
+            await self.bridge.mug(mug_id, who, int(self._num("mug_goons", 2, 1)))
+        except BridgeError as exc:
+            await self._mug_refund(mug_id, f"the game didn't answer ({exc.__class__.__name__})")
+            return {"success": True}
+        return {"success": True, "reply": f"@{who} paid {cost} points. Your crew is on the way..."}
+
+    async def _mug_answer(self, kind: str, ev: dict) -> None:
+        """The mod's answer to a !mug: "mug_result" (goons sent, or why not -> refund) and later
+        "mug_outcome" ("won" = the streamer beat them, "lost" = the streamer got knocked out, "left")."""
+        mug = self._mugs.get(int(ev.get("mug") or 0))
+        if mug is None:
+            return                            # not ours (an old run, or another streamer's)
+        who = mug["who"]
+        if kind == "mug_result":
+            mug["answered"] = True
+            if ev.get("ok"):
+                await self._say(mug["platform"], f"{who}'s crew is coming for the streamer!")
+            else:
+                await self._mug_refund(int(ev["mug"]), str(ev.get("msg") or "the game refused"))
+            return
+        self._mugs.pop(int(ev["mug"]), None)
+        text = {"won": f"The streamer fought off {who}'s crew!",
+                "lost": f"{who}'s crew mugged the streamer!",
+                }.get(str(ev.get("outcome")), f"{who}'s crew gave up and left.")
+        await self._say(mug["platform"], text)
+
+    async def _mug_refund(self, mug_id: int, why: str) -> None:
+        """Give a !mug's points back, free the cooldown and say why in the chatter's chat."""
+        mug = self._mugs.pop(mug_id, None)
+        if mug is None:
+            return
+        store = getattr(self.ctx, "store", None)
+        if mug["uid"] is not None and mug["cost"] > 0 and store is not None:
+            await store.adjust_points(mug["uid"], mug["cost"], "!mug refund (Schedule I)", "schedule1")
+        self._mug_ready_at = 0.0
+        await self._say(mug["platform"], f"@{mug['who']} no mugging: {why}. Points refunded.")
+
+    async def _expire_mugs(self) -> None:
+        """Every loop pass: refund muggings the game never answered (MUG_ANSWER_SEC); forget answered
+        ones whose outcome never came (MUG_FORGET_SEC)."""
+        now = time.monotonic()
+        for mug_id, mug in list(self._mugs.items()):
+            if not mug["answered"] and now - mug["at"] > MUG_ANSWER_SEC:
+                await self._mug_refund(mug_id, "the game didn't answer")
+            elif mug["answered"] and now - mug["at"] > MUG_FORGET_SEC:
+                self._mugs.pop(mug_id, None)
 
     async def _app_button(self, kind: str, key: str) -> None:
         """The streamer pressed Remove or Swap on a chatter in the in-game phone app.
@@ -433,8 +586,21 @@ class Schedule1Customers(BasePlugin):
         if await self.roster.get(person_key(plat, u.id, u.username)):
             return
         _row, new = await self.roster.join(plat, u.id, u.username, u.display_name, is_sub=u.is_subscriber)
+        if new and self.role == "client":
+            await self._forward("join", plat, u.id, u.username, u.display_name, u.is_subscriber)
         if new:
             self._wake.set()
+
+    async def _forward(self, kind: str, platform: str, user_id: str, username: str, display_name: str,
+                       is_sub: bool = False) -> bool:
+        """Co-op client: pass a join / leave to the host's list through our mod (POST /remote).
+        False when the mod can't be reached."""
+        try:
+            await self.bridge.remote(kind, platform, str(user_id or ""), username, display_name or username, is_sub)
+            return True
+        except BridgeError as exc:
+            log.info("Schedule I: couldn't pass %s to the host: %s", kind, exc)
+            return False
 
     async def _on_flag_event(self, payload: dict) -> None:
         """A custom flag marked someone hidden: take them off the list now, not at the next red-flag refresh."""
@@ -447,17 +613,25 @@ class Schedule1Customers(BasePlugin):
             self._wake.set()
 
     async def execute(self, req: ExecuteRequest) -> dict:
-        """Chat commands from commands.json: !customer [leave], !topcustomers."""
+        """Chat commands from commands.json: !customer [leave], !topcustomers, !mug.
+
+        In a friend's co-op game (``role`` "client") !customer joins / leaves go to the host's list
+        through our mod (_forward), and !topcustomers reads the host's list."""
         if self.roster is None:
             return {"success": False, "error": "Schedule I plugin not started"}
         name = (req.command_name or "").lower()
         u = req.user
+        if name == "mug" and u is not None:
+            return await self._mug(req)
         if name == "topcustomers":
-            top = await self.roster.top(3)
+            if self.role == "client":
+                top = [(r.get("name"), r.get("spent"), r.get("deals")) for r in (self._board_in.get("top") or [])[:3]]
+            else:
+                top = [(clean_name(r["display_name"], r["username"]), r["spent"], r["deals"])
+                       for r in await self.roster.top(3)]
             if not top:
                 return {"success": True, "reply": "No customer has bought anything yet."}
-            parts = [f"{i}. {clean_name(r['display_name'], r['username'])} {money(r['spent'])} ({r['deals']} deals)"
-                     for i, r in enumerate(top, 1)]
+            parts = [f"{i}. {n} {money(spent)} ({deals} deals)" for i, (n, spent, deals) in enumerate(top, 1)]
             return {"success": True, "reply": "Best customers: " + " | ".join(parts)}
         if name != "customer" or u is None:
             return {"success": False, "error": f"unknown Schedule I command {name}"}
@@ -467,6 +641,8 @@ class Schedule1Customers(BasePlugin):
         who = clean_name(u.display_name, u.username)
         arg = (req.args[0].lower() if req.args else "")
         if arg in ("leave", "quit", "stop", "remove"):
+            if self.role == "client":
+                await self._forward("leave", plat, u.id, u.username, u.display_name)
             if await self.roster.leave(key):
                 self._wake.set()
                 return {"success": True, "reply": f"@{who} you're off the customer list."}
@@ -477,6 +653,14 @@ class Schedule1Customers(BasePlugin):
             return {"success": True, "reply": "That name can't be shown in the game, sorry."}
         row, new = await self.roster.join(plat, u.id, u.username, u.display_name,
                                            is_sub=bool(getattr(u, "is_subscriber", False)))
+        if self.role == "client":
+            if row["npc_id"]:
+                return {"success": True, "reply": f"@{who} you're already a customer in the co-op game."}
+            ok = await self._forward("join", plat, u.id, u.username, u.display_name,
+                                     bool(getattr(u, "is_subscriber", False)))
+            return {"success": True, "reply": f"@{who} you're on the co-op game's customer list. "
+                                              f"Your name shows up on a customer soon." if ok else
+                                              f"@{who} the game isn't reachable right now, try again later."}
         if row["npc_id"]:
             return {"success": True, "reply": f"@{who} you're already a customer: {row['deals']} deals, "
                                               f"{money(row['spent'])} spent. (!customer leave to stop)"}
@@ -498,6 +682,8 @@ class Schedule1Customers(BasePlugin):
             detail = "waiting for the Schedule I mod"
         elif not self._loaded:
             detail = "game on the main menu"
+        elif self.role == "client":
+            detail = f"in a friend's co-op game: {len(self._board_in.get('named') or [])} customer(s) carry chatter names"
         else:
             named = len(self._sent or {})
             detail = f"{named} customer(s) carry chatter names"
