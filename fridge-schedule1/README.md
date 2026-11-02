@@ -24,6 +24,18 @@ What happens:
 
 Renaming is only on your PC: co-op friends see the normal names, and nothing is written into your save.
 
+## Shifts: sharing customers when the waiting list is long
+
+Off by default. On Core's Schedule I card:
+
+- **Shift ends after this many deals**: when someone is waiting, a chatter whose customer has made that
+  many deals goes to the back of the line and the chatter waiting longest takes the customer over.
+- **Shift ends after (minutes)**: the same by time, for customers who rarely order.
+- **Subscribers / members keep their customer**: shifts never end for subs.
+
+0 turns a trigger off; both can be on. Nobody is moved while nobody is waiting. Deals and money spent stay
+with the chatter for `!topcustomers`. Chat hears "zackfan99's shift is over, bea takes over Kyle Cooley."
+
 ## The Chat app on your phone
 
 The mod adds a **Chat** app (purple speech bubble) to the in-game phone:

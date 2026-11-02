@@ -31,7 +31,7 @@ from core.models import ExecuteRequest, Platform
 from core.plugin_api import BasePlugin
 
 from .bridge import Bridge, BridgeError
-from .roster import Roster, clean_name, desired_names, person_key, plan_assignments
+from .roster import Roster, clean_name, desired_names, person_key, plan_assignments, plan_rotation
 
 log = logging.getLogger("plugins.schedule1")
 
@@ -222,13 +222,25 @@ class Schedule1Customers(BasePlugin):
             return                            # main menu: nothing to name yet
         s = self._s()
         people = await self.roster.all()
+        # Shifts that are over (rotate_after_deals / rotate_after_min) go to the back of the line
+        # first, so plan_assignments below hands their customers to the chatters waiting longest.
+        rotated: dict[str, dict] = {}         # npc id -> the row of the chatter whose shift ended
+        for key in plan_rotation(people, after_deals=int(self._num("rotate_after_deals", 0, 0)),
+                                 after_min=self._num("rotate_after_min", 0, 0),
+                                 keep_subs=bool(s.get("rotate_keep_subs"))):
+            row = next(p for p in people if p["key"] == key)
+            rotated[row["npc_id"]] = row
+            await self.roster.requeue(key)
+        if rotated:
+            people = await self.roster.all()
         pairs = plan_assignments(self._customers, people,
                                  prefer_unlocked=bool(s.get("prefer_unlocked", True)),
                                  max_named=int(s.get("max_named") or 0))
         if pairs:
             await self.roster.assign(pairs)
             people = await self.roster.all()
-            await self._announce_new(pairs, people)
+        if pairs or rotated:
+            await self._announce_new(pairs, people, rotated)
         names = desired_names(self._customers, people,
                               name_style=str(s.get("name_style") or "chatter"),
                               max_len=int(s.get("max_name_len") or 24))
@@ -260,16 +272,34 @@ class Schedule1Customers(BasePlugin):
         top = [row(r, by_id.get(r["npc_id"] or "")) for r in await self.roster.top(BOARD_TOP)]
         return {"named": named, "waiting": waiting, "top": top}
 
-    async def _announce_new(self, pairs: list[tuple[str, str]], people: list[dict]) -> None:
-        """'zackfan99 is now a customer' in chat, on the chatter's own platform (``announce_new``)."""
+    async def _announce_new(self, pairs: list[tuple[str, str]], people: list[dict],
+                            rotated: Optional[dict[str, dict]] = None) -> None:
+        """Chat lines for new customers (``announce_new``), each on the chatter's own platform:
+        'zackfan99 is now a customer', or after a rotation (sync's ``rotated``: npc id -> old row)
+        "zackfan99's shift is over, bea takes over Kyle Cooley"."""
         if not self._s().get("announce_new", True):
             return
+        rotated = dict(rotated or {})
         rows = {p["key"]: p for p in people}
-        for key, _npc in pairs:
+        by_id = {c["id"]: c for c in self._customers}
+        for key, npc in pairs:
             row = rows.get(key)
-            if row:
-                who = clean_name(row["display_name"], row["username"])
+            if not row:
+                continue
+            who = clean_name(row["display_name"], row["username"])
+            old = rotated.pop(npc, None)
+            if old is None:
                 await self._say(row["platform"], f"{who} is now one of the streamer's customers in Schedule I.")
+                continue
+            cust = by_id.get(npc) or {}
+            own = f"{cust.get('first', '')} {cust.get('last', '')}".strip() or "their customer"
+            text = f"{clean_name(old['display_name'], old['username'])}'s shift is over, {who} takes over {own}."
+            await self._say(row["platform"], text)
+            if old["platform"] != row["platform"]:
+                await self._say(old["platform"], text)
+        for old in rotated.values():          # shift ended but nobody took that customer (max_named)
+            await self._say(old["platform"], f"{clean_name(old['display_name'], old['username'])}'s shift is over; "
+                                             f"back on the waiting list.")
 
     async def poll_events(self) -> None:
         """Handle the mod's new events. A new mod session (boot) starts from its latest event, not its history."""
@@ -305,6 +335,8 @@ class Schedule1Customers(BasePlugin):
             return
         if kind == "deal":
             row = await self.roster.record_deal(npc, float(ev.get("payment") or 0))
+            if self._num("rotate_after_deals", 0, 0) > 0:
+                self._wake.set()              # this deal may end the chatter's shift
         else:
             row = await self.roster.by_npc(npc)
         if not row or self._row_hidden(row):
@@ -400,7 +432,7 @@ class Schedule1Customers(BasePlugin):
             return
         if await self.roster.get(person_key(plat, u.id, u.username)):
             return
-        _row, new = await self.roster.join(plat, u.id, u.username, u.display_name)
+        _row, new = await self.roster.join(plat, u.id, u.username, u.display_name, is_sub=u.is_subscriber)
         if new:
             self._wake.set()
 
@@ -443,7 +475,8 @@ class Schedule1Customers(BasePlugin):
             return {"success": True}          # say nothing to hidden chatters
         if not who:
             return {"success": True, "reply": "That name can't be shown in the game, sorry."}
-        row, new = await self.roster.join(plat, u.id, u.username, u.display_name)
+        row, new = await self.roster.join(plat, u.id, u.username, u.display_name,
+                                           is_sub=bool(getattr(u, "is_subscriber", False)))
         if row["npc_id"]:
             return {"success": True, "reply": f"@{who} you're already a customer: {row['deals']} deals, "
                                               f"{money(row['spent'])} spent. (!customer leave to stop)"}

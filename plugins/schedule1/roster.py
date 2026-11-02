@@ -7,8 +7,9 @@ One row per chatter in the ``people`` table. ``npc_id`` is the game's customer i
 Rows also count each chatter's deals and money spent (in-game dollars) for !customer and
 !topcustomers.
 
-The pure helpers at the top (clean_name, person_key, plan_assignments, desired_names) do no I/O,
-so the tests and plugin.py share them. plugin.py's sync loop calls plan_assignments, then sends
+The pure helpers at the top (clean_name, person_key, plan_assignments, plan_rotation,
+desired_names) do no I/O, so the tests and plugin.py share them. plugin.py's sync loop calls
+plan_rotation (shifts that are over go to the back of the line), then plan_assignments, then sends
 desired_names(...) to the game mod's POST /names.
 """
 
@@ -30,9 +31,17 @@ CREATE TABLE IF NOT EXISTS people (
     assigned_at  REAL,
     deals        INTEGER NOT NULL DEFAULT 0,
     spent        REAL NOT NULL DEFAULT 0,   -- in-game dollars paid in completed deals
-    last_deal_at REAL
+    last_deal_at REAL,
+    shift_deals  INTEGER NOT NULL DEFAULT 0, -- deals on the current customer (rotate_after_deals)
+    is_sub       INTEGER NOT NULL DEFAULT 0  -- subscriber / member when last seen (rotate_keep_subs)
 );
 """
+
+# Columns added after the first release; setup() adds them to older databases. Keep in sync with SCHEMA.
+ADDED_COLUMNS = [
+    "ALTER TABLE people ADD COLUMN shift_deals INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE people ADD COLUMN is_sub INTEGER NOT NULL DEFAULT 0",
+]
 
 # Letters, digits and a few safe marks. The game's font may not have emoji or other scripts,
 # so a display name with anything else falls back to the plain username.
@@ -93,6 +102,40 @@ def plan_assignments(
     return out
 
 
+def plan_rotation(
+    people: Iterable[dict],
+    *,
+    after_deals: int = 0,
+    after_min: float = 0,
+    keep_subs: bool = False,
+    now: Optional[float] = None,
+) -> list[str]:
+    """Chatters whose shift on a customer is over. Returns person keys, longest-serving first.
+
+    after_deals (setting rotate_after_deals): shift ends after this many deals on the customer.
+    after_min (setting rotate_after_min): shift ends after this many minutes on the customer.
+    0 turns a trigger off; with both off nobody rotates. keep_subs (rotate_keep_subs): subscribers /
+    members keep their customer. Only as many shifts end as there are chatters waiting, so a
+    customer never goes back to its own name just because a shift ran out.
+    """
+    people = list(people)
+    waiting = sum(1 for p in people if not p.get("npc_id"))
+    if waiting == 0 or (after_deals <= 0 and after_min <= 0):
+        return []
+    now = time.time() if now is None else now
+    due = []
+    for p in people:
+        if not p.get("npc_id") or (keep_subs and p.get("is_sub")):
+            continue
+        by_deals = after_deals > 0 and int(p.get("shift_deals") or 0) >= after_deals
+        assigned = p.get("assigned_at")       # None on very old rows: never due by time
+        by_time = after_min > 0 and assigned is not None and now - float(assigned) >= after_min * 60
+        if by_deals or by_time:
+            due.append(p)
+    due.sort(key=lambda p: (p.get("assigned_at") or 0, p["key"]))
+    return [p["key"] for p in due[:waiting]]
+
+
 def desired_names(
     customers: Iterable[dict],
     people: Iterable[dict],
@@ -128,6 +171,11 @@ class Roster:
 
     async def setup(self) -> None:
         await self.db.script(SCHEMA)
+        for sql in ADDED_COLUMNS:
+            try:
+                await self.db.execute(sql)
+            except Exception:
+                pass                          # the column is already there
 
     async def get(self, key: str) -> Optional[dict]:
         return await self.db.fetchone("SELECT * FROM people WHERE key = ?", (key,))
@@ -138,22 +186,27 @@ class Roster:
             "SELECT * FROM people ORDER BY npc_id IS NULL, joined_at, key"
         )
 
-    async def join(self, platform: str, user_id: str, username: str, display_name: str) -> tuple[dict, bool]:
+    async def join(self, platform: str, user_id: str, username: str, display_name: str,
+                   is_sub: Optional[bool] = None) -> tuple[dict, bool]:
         """Add a chatter to the waiting list. Returns (row, True) when new, (existing row, False) otherwise.
 
-        An existing row only gets its display name refreshed (people rename themselves).
+        An existing row only gets its display name and subscriber flag refreshed (people rename
+        themselves, subs lapse). is_sub None = unknown (added by hand on the page): left as it was.
         """
         key = person_key(platform, user_id, username)
         row = await self.get(key)
         if row:
-            if display_name and display_name != row["display_name"]:
-                await self.db.execute("UPDATE people SET display_name = ?, username = ? WHERE key = ?",
-                                      (display_name, username.lower(), key))
+            sub = row["is_sub"] if is_sub is None else int(bool(is_sub))
+            if (display_name and display_name != row["display_name"]) or sub != row["is_sub"]:
+                await self.db.execute("UPDATE people SET display_name = ?, username = ?, is_sub = ? WHERE key = ?",
+                                      (display_name or row["display_name"], username.lower(), sub, key))
                 row = await self.get(key)
             return row, False
         await self.db.execute(
-            "INSERT INTO people (key, platform, user_id, username, display_name, joined_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (key, platform.lower(), str(user_id or ""), username.lower(), display_name or username, time.time()),
+            "INSERT INTO people (key, platform, user_id, username, display_name, joined_at, is_sub)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (key, platform.lower(), str(user_id or ""), username.lower(), display_name or username, time.time(),
+             int(bool(is_sub))),
         )
         return await self.get(key), True
 
@@ -165,12 +218,13 @@ class Roster:
 
     async def requeue(self, key: str) -> bool:
         """Back of the waiting list: drop their customer (the next waiting chatter gets it on the
-        next sync) and join again as of now. Deals and money spent are kept. The phone app's Swap."""
+        next sync) and join again as of now. Deals and money spent are kept. The phone app's Swap
+        and shift rotation (plan_rotation) both use this."""
         before = await self.get(key)
         if not before:
             return False
-        await self.db.execute("UPDATE people SET npc_id = NULL, assigned_at = NULL, joined_at = ? WHERE key = ?",
-                              (time.time(), key))
+        await self.db.execute("UPDATE people SET npc_id = NULL, assigned_at = NULL, shift_deals = 0, joined_at = ?"
+                              " WHERE key = ?", (time.time(), key))
         return True
 
     async def find_name(self, platform: str, name: str) -> Optional[dict]:
@@ -187,8 +241,8 @@ class Roster:
         """Store plan_assignments() results."""
         now = time.time()
         for key, npc_id in pairs:
-            await self.db.execute("UPDATE people SET npc_id = ?, assigned_at = ? WHERE key = ? AND npc_id IS NULL",
-                                  (npc_id, now, key))
+            await self.db.execute("UPDATE people SET npc_id = ?, assigned_at = ?, shift_deals = 0"
+                                  " WHERE key = ? AND npc_id IS NULL", (npc_id, now, key))
 
     async def by_npc(self, npc_id: str) -> Optional[dict]:
         return await self.db.fetchone("SELECT * FROM people WHERE npc_id = ?", (npc_id,))
@@ -199,7 +253,8 @@ class Roster:
         if not row:
             return None
         await self.db.execute(
-            "UPDATE people SET deals = deals + 1, spent = spent + ?, last_deal_at = ? WHERE key = ?",
+            "UPDATE people SET deals = deals + 1, shift_deals = shift_deals + 1, spent = spent + ?, last_deal_at = ?"
+            " WHERE key = ?",
             (max(0.0, float(payment or 0)), time.time(), row["key"]),
         )
         return await self.get(row["key"])

@@ -12,6 +12,8 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] Core opt-in: `schedule1.enabled` default **false**; `schedule1.bridge_url` default `http://127.0.0.1:3857`.
 - [ ] Hidden (`avatars.hide`) and red-flagged chatters never get a name; a hidden custom flag removes them at once.
 - [ ] Renames are local only (no save writes, nothing sent to co-op players). Customers' own names come back on leave.
+- [ ] Shift rotation (`rotate_after_deals`, `rotate_after_min`, `rotate_keep_subs`) defaults off; only moves
+      chatters while someone waits; keeps their deals / spent. New `people` columns go in SCHEMA and ADDED_COLUMNS.
 - [ ] Stream alerts in the game are phone pop-ups (NotificationsManager), never text messages (conversations are saved).
       `alerts_in_game` default **false**; hidden / red-flagged chatters never appear in alerts either.
 - [ ] Game objects only touched on the main thread (`Core.OnUpdate`); the HTTP thread only uses `Shared`.

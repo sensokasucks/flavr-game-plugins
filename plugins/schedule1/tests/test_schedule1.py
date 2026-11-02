@@ -29,7 +29,7 @@ from core.models import ChatUser, ExecuteRequest, Platform
 from core.plugins import PluginManager
 from core.store import Store
 
-from plugins.schedule1.roster import clean_name, desired_names, person_key, plan_assignments
+from plugins.schedule1.roster import clean_name, desired_names, person_key, plan_assignments, plan_rotation
 
 REPO = Path(__file__).resolve().parents[3]
 TOKEN = "tok-schedule1-123456789"
@@ -91,6 +91,21 @@ class PlanTests(unittest.TestCase):
     def test_keeps_existing_and_respects_max(self):
         people = [self.person("t:1", 1, npc="b_met"), self.person("t:2", 2), self.person("t:3", 3)]
         self.assertEqual(plan_assignments(self.CUSTOMERS, people, max_named=2), [("t:2", "c_met")])
+
+    def test_rotation_rules(self):
+        # a: 2 deals on the customer, assigned at t=100; b: 0 deals, assigned at t=0; c waits
+        a = dict(self.person("t:a", 1, npc="b_met"), shift_deals=2, assigned_at=100, is_sub=0)
+        b = dict(self.person("t:b", 2, npc="c_met"), shift_deals=0, assigned_at=0, is_sub=1)
+        c = self.person("t:c", 3)
+        people = [a, b, c]
+        self.assertEqual(plan_rotation(people), [])                                  # both triggers off
+        self.assertEqual(plan_rotation(people, after_deals=2), ["t:a"])
+        self.assertEqual(plan_rotation(people, after_min=1, now=130), ["t:b"])       # only b has 60 s in
+        # both due, one waiting: the longest-serving one goes; subs can be kept on
+        self.assertEqual(plan_rotation(people, after_min=1, now=1000), ["t:b"])
+        self.assertEqual(plan_rotation(people, after_min=1, now=1000, keep_subs=True), ["t:a"])
+        # nobody waiting: nobody rotates
+        self.assertEqual(plan_rotation([a, b], after_deals=1, after_min=1, now=1000), [])
 
     def test_desired_names_only_for_customers_in_game(self):
         people = [self.person("t:1", 1, npc="b_met", name="zackfan99"),
@@ -231,6 +246,54 @@ class MockModTests(unittest.TestCase):
             await plugin.tick()
             self.assertIn("Nobody is waiting", self.world.notices[-1]["text"])
             self.assertTrue((await plugin.roster.get("twitch:1"))["npc_id"])
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
+    def test_shift_rotation(self):
+        """A chatter's customer passes to the next waiting chatter after a deal / after some minutes."""
+        async def go():
+            self.cfg["schedule1"]["max_named"] = 1
+            self.cfg["schedule1"]["rotate_after_deals"] = 1
+            mgr, plugin, replies, _store = await self.started()
+            zack = ChatUser(platform=Platform.TWITCH, id="1", username="zackfan99", display_name="ZackFan99")
+            bea = ChatUser(platform=Platform.KICK, id="2", username="bea", display_name="Bea")
+            await plugin.execute(self.req(zack, "!customer"))
+            await plugin.execute(self.req(bea, "!customer"))
+            await plugin.tick()
+            self.assertEqual((await plugin.roster.get("twitch:1"))["npc_id"], "austin_steiner")
+
+            # Zack's customer makes a deal: his shift ends, Bea takes over, totals stay with Zack
+            replies.clear()
+            self.world.order("austin_steiner", deal_after=0)
+            self.world.step()
+            await plugin.tick()                 # deal recorded, sync woken
+            await plugin.tick()                 # rotation
+            self.assertEqual((await plugin.roster.get("kick:2"))["npc_id"], "austin_steiner")
+            zack_row = await plugin.roster.get("twitch:1")
+            self.assertIsNone(zack_row["npc_id"])
+            self.assertEqual(zack_row["deals"], 1)
+            self.assertIn("ZackFan99's shift is over, Bea takes over Austin Steiner.", replies)
+            names = {c["id"]: c["shown"] for c in self.world.snapshot()["customers"]}
+            self.assertEqual(names["austin_steiner"], "Bea")
+
+            # by time: Bea has been on for 10 minutes -> Zack's turn again
+            self.cfg["schedule1"]["rotate_after_deals"] = 0
+            self.cfg["schedule1"]["rotate_after_min"] = 5
+            await plugin.roster.db.execute("UPDATE people SET assigned_at = assigned_at - 600 WHERE key = 'kick:2'")
+            plugin._wake.set()
+            await plugin.tick()
+            self.assertEqual((await plugin.roster.get("twitch:1"))["npc_id"], "austin_steiner")
+
+            # subscribers keep theirs when rotate_keep_subs is on
+            self.cfg["schedule1"]["rotate_keep_subs"] = True
+            zack_sub = ChatUser(platform=Platform.TWITCH, id="1", username="zackfan99", display_name="ZackFan99",
+                                is_subscriber=True)
+            await plugin.execute(self.req(zack_sub, "!customer"))
+            await plugin.roster.db.execute("UPDATE people SET assigned_at = assigned_at - 600 WHERE key = 'twitch:1'")
+            plugin._wake.set()
+            await plugin.tick()
+            self.assertEqual((await plugin.roster.get("twitch:1"))["npc_id"], "austin_steiner")
             await mgr.stop_all()
 
         asyncio.run(go())
