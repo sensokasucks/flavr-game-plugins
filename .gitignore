@@ -20,3 +20,7 @@ node_modules/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# C# build output (fridge-schedule1/mod, fridge-granvir-stats/plugin)
+**/bin/
+**/obj/
