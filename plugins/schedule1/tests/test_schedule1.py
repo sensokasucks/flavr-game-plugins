@@ -298,6 +298,44 @@ class MockModTests(unittest.TestCase):
 
         asyncio.run(go())
 
+    def test_when_they_turn_up(self):
+        """Status words reach !customer and the phone list; a newly named met customer is nudged to
+        order (nudge_new), and chat hears it; Find asks the mod for a map marker."""
+        async def go():
+            self.cfg["schedule1"]["max_named"] = 1
+            mgr, plugin, replies, _store = await self.started()
+            await plugin.tick()                                   # Core already running (event stream known)
+            zack = ChatUser(platform=Platform.TWITCH, id="1", username="zackfan99", display_name="ZackFan99")
+            bea = ChatUser(platform=Platform.KICK, id="2", username="bea", display_name="Bea")
+            await plugin.execute(self.req(zack, "!customer"))
+            await plugin.execute(self.req(bea, "!customer"))
+            plugin._wake.set()
+            await plugin.tick()                                   # assigns Austin Steiner (met) -> nudge
+            self.assertEqual(self.world.nudges, ["austin_steiner"])
+            await plugin.tick()                                   # nudge_result -> chat line
+            self.assertIn("ZackFan99 just texted the streamer for an order.", replies)
+
+            out = (await plugin.execute(self.req(zack, "!customer")))["reply"]
+            self.assertIn("Your customer: next order expected", out)
+            self.assertTrue(self.world.board["named"][0]["status"].startswith("next order expected"))
+            self.assertEqual(self.world.board["waiting"][0]["status"], "#1 waiting for a free customer")
+            page = await plugin.snapshot()
+            self.assertTrue(page["people"][0]["status"].startswith("next order expected"))
+
+            self.assertTrue(await plugin.find_person("twitch:1"))
+            self.assertEqual(self.world.finds[-1], {"npc": "austin_steiner", "by": "ZackFan99"})
+            self.assertFalse(await plugin.find_person("kick:2"))        # waiting: nothing to find
+
+            # switched off: the next named customer isn't nudged
+            self.cfg["schedule1"]["nudge_new"] = False
+            await plugin.execute(self.req(zack, "!customer leave"))
+            await plugin.tick()
+            self.assertEqual((await plugin.roster.get("kick:2"))["npc_id"], "austin_steiner")
+            self.assertEqual(self.world.nudges, ["austin_steiner"])
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
     def test_mug(self):
         """!mug: off by default; costs points; the game's answer is said in chat; refused = refunded."""
         async def go():

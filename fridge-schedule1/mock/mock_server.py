@@ -12,6 +12,9 @@ Lets you test Stream Core's Schedule I plugin (plugins/schedule1) without Schedu
   POST /notify               a stream alert for the phone (kept in World.notices, printed)
   POST /mug                  !mug: answers with a "mug_result" event at once (World.mug_refusal refuses);
                              World.mug_end() fakes the "mug_outcome"
+  POST /nudge                order nudge: "nudge_result" event at once (ok for met customers)
+  POST /find                 map marker request (kept in World.finds)
+  GET /customers entries carry "status" / "status_text" like the mod's CustomerStatus.cs (simplified)
   POST /remote               co-op client join / leave (kept in World.remote_requests); World.role = "client"
                              makes the mock act as a guest in a friend's game
 
@@ -79,6 +82,8 @@ class World:
         self.mugs: list[dict] = []                    # every POST /mug
         self.mug_refusal = ""                         # set to refuse the next muggings with this text
         self.remote_requests: list[dict] = []         # every POST /remote (client joins / leaves)
+        self.nudges: list[str] = []                   # npc ids from POST /nudge
+        self.finds: list[dict] = []                   # every POST /find
 
     def shown(self, cust: dict) -> str:
         """The name the game would show now (Core's name, else the customer's own)."""
@@ -95,7 +100,14 @@ class World:
     def snapshot(self) -> dict:
         with self.lock:
             return {"loaded": True, "boot": self.boot, "source": "mock", "role": self.role, "board": self.board,
-                    "customers": [dict(c, shown=self.shown(c)) for c in self.customers]}
+                    "customers": [dict(c, shown=self.shown(c), **self.status(c)) for c in self.customers]}
+
+    @staticmethod
+    def status(cust: dict) -> dict:
+        """Like the mod's CustomerStatus.Describe, simplified: met customers always "waiting"."""
+        if not cust["unlocked"]:
+            return {"status": "locked", "status_text": "not met yet: walk up and offer a sample"}
+        return {"status": "waiting", "status_text": "next order expected today around 18:00 (in about 3 in-game hours)"}
 
     def set_names(self, names: dict) -> dict:
         """POST /names: replace the whole set; unknown ids are reported back."""
@@ -141,6 +153,23 @@ class World:
         with self.lock:
             self.remote_requests.append(body)
         return 200, {"success": True, "role": self.role}
+
+    def nudge(self, body: dict) -> dict:
+        """POST /nudge: answer with "nudge_result" at once (the real mod waits a few seconds)."""
+        npc = str(body.get("npc") or "")
+        with self.lock:
+            self.nudges.append(npc)
+            cust = next((c for c in self.customers if c["id"] == npc), None)
+            ok = bool(cust and cust["unlocked"])
+            self.add_event({"type": "nudge_result", "npc": npc, "ok": ok,
+                            "msg": "" if ok else "not met yet" if cust else "customer not in this save"})
+        return {"success": True, "role": self.role}
+
+    def find(self, body: dict) -> dict:
+        """POST /find: the real mod puts a map marker on the customer; the mock only remembers it."""
+        with self.lock:
+            self.finds.append(body)
+        return {"success": True, "role": self.role}
 
     # ---- the fake game's activity (also called straight from tests)
 
@@ -241,7 +270,7 @@ def make_handler(world: World, token: str = ""):
             if not self._allowed():
                 return
             path = urlparse(self.path).path
-            if path not in ("/names", "/board", "/notify", "/mug", "/remote"):
+            if path not in ("/names", "/board", "/notify", "/mug", "/remote", "/nudge", "/find"):
                 self._send(404, {"success": False, "error": "not found"})
                 return
             if path in ("/names", "/board") and world.role == "client":
@@ -261,6 +290,12 @@ def make_handler(world: World, token: str = ""):
             elif path == "/mug":
                 print(f"mugging asked by {body.get('by')} ({body.get('goons')} goons)")
                 self._send(200, world.mug(body))
+            elif path == "/nudge":
+                print(f"order nudge for {body.get('npc')}")
+                self._send(200, world.nudge(body))
+            elif path == "/find":
+                print(f"map marker on {body.get('npc')} ({body.get('by')})")
+                self._send(200, world.find(body))
             elif path == "/remote":
                 code, result = world.remote(body)
                 print(f"co-op {body.get('type')}: {body.get('username')} ({body.get('platform')})")

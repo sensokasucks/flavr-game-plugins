@@ -5,6 +5,7 @@ admin token (the dashboard sends X-Admin-Token); while the plugin is off they an
   GET  /api/schedule1/customers          mod status + everyone on the list (Schedule1Customers.snapshot)
   POST /api/schedule1/customers/add      {"platform", "username"}: streamer adds a chatter by hand
   POST /api/schedule1/customers/remove   {"key"}: take a chatter off (their customer gets its own name back)
+  POST /api/schedule1/customers/find     {"key"}: mark their customer on the in-game phone map
 """
 
 from __future__ import annotations
@@ -37,6 +38,12 @@ def add_routes(router, get_running) -> None:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         return {"ok": True, "key": row["key"]}
+
+    @router.post("/api/schedule1/customers/find")
+    async def s1_find(payload: Dict[str, Any] = Body(default={}), x_admin_token: Optional[str] = Header(default=None)):
+        """Mark a chatter's customer on the streamer's in-game phone map (Schedule1Customers.find_person)."""
+        inst = admin(x_admin_token)
+        return {"ok": await inst.find_person(str(payload.get("key") or ""))}
 
     @router.post("/api/schedule1/customers/remove")
     async def s1_remove(payload: Dict[str, Any] = Body(default={}), x_admin_token: Optional[str] = Header(default=None)):

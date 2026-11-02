@@ -14,7 +14,11 @@
 //                              "mug_outcome" {"mug", "outcome": "won" | "lost" | "left"}
 //   POST /remote               {"type": "join" | "leave", "platform", "user_id", "username", "display_name",
 //                              "is_sub"}: co-op client only, passed to the host (LobbySync.cs)
-//   GET /customers also says "role" ("host" / "client") and "board" (the lists, the host's on a client).
+//   POST /nudge                {"npc"}: a newly named, met customer texts an order (host only; plugin.py
+//                              setting nudge_new); answered by event "nudge_result" {"npc", "ok", "msg"}
+//   POST /find                 {"npc", "by"}: mark that customer on this player's phone map, label "by"
+//   GET /customers also says "role" ("host" / "client") and "board" (the lists, the host's on a client);
+//   each customer has "status" (locked / deal / offer / dealer / waiting) and "status_text" (words).
 //   On a client, POST /names and /board answer 409: the host decides.
 //
 // Safety (same rules as the mock, mock/mock_server.py): listens on loopback only; everything but
@@ -124,6 +128,7 @@ namespace FridgeSchedule1
                     {
                         ["id"] = c.id, ["first"] = c.first, ["last"] = c.last,
                         ["shown"] = c.shown, ["unlocked"] = c.unlocked,
+                        ["status"] = c.status ?? "", ["status_text"] = c.statusText ?? "",
                     }).ToList(),
                 });
                 return;
@@ -143,7 +148,7 @@ namespace FridgeSchedule1
                 return;
             }
 
-            if (req.HttpMethod == "POST" && (path == "/mug" || path == "/remote"))
+            if (req.HttpMethod == "POST" && (path == "/mug" || path == "/remote" || path == "/nudge" || path == "/find"))
             {
                 CoreRequest r;
                 try
@@ -152,7 +157,8 @@ namespace FridgeSchedule1
                     var o = doc.RootElement;
                     r = new CoreRequest
                     {
-                        type = path == "/mug" ? "mug" : Str(o, "type"),
+                        type = path == "/remote" ? Str(o, "type") : path.Substring(1),
+                        npc = Str(o, "npc"),
                         id = o.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number ? id.GetInt64() : 0,
                         by = Str(o, "by"),
                         goons = o.TryGetProperty("goons", out var g) && g.ValueKind == JsonValueKind.Number ? g.GetInt32() : 2,
@@ -168,9 +174,14 @@ namespace FridgeSchedule1
                     Json(ctx, 400, Error("bad body: " + ex.Message));
                     return;
                 }
-                if (r.type != "mug" && r.type != "join" && r.type != "leave")
+                if (r.type != "mug" && r.type != "join" && r.type != "leave" && r.type != "nudge" && r.type != "find")
                 {
                     Json(ctx, 400, Error("type must be join or leave"));
+                    return;
+                }
+                if ((r.type == "nudge" || r.type == "find") && string.IsNullOrEmpty(r.npc))
+                {
+                    Json(ctx, 400, Error("npc is empty"));
                     return;
                 }
                 if (!Shared.AddRequest(r))       // Core.OnUpdate handles it next frame
@@ -256,7 +267,7 @@ namespace FridgeSchedule1
         private static Dictionary<string, object> RowJson(BoardRow r) => new Dictionary<string, object>
         {
             ["key"] = r.key, ["name"] = r.name, ["platform"] = r.platform, ["customer"] = r.customer,
-            ["npc"] = r.npc, ["deals"] = r.deals, ["spent"] = r.spent,
+            ["npc"] = r.npc, ["deals"] = r.deals, ["spent"] = r.spent, ["status"] = r.status ?? "",
         };
 
         // The request body as text ("{}" when empty); refuses bodies over MaxBodyBytes.
@@ -286,6 +297,7 @@ namespace FridgeSchedule1
                     platform = Str(r, "platform"),
                     customer = Str(r, "customer"),
                     npc = Str(r, "npc"),
+                    status = Str(r, "status"),
                     deals = r.TryGetProperty("deals", out var d) && d.ValueKind == JsonValueKind.Number ? d.GetInt32() : 0,
                     spent = r.TryGetProperty("spent", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetDouble() : 0,
                 });

@@ -12,6 +12,7 @@
 //                      the phone app's board / feed and alerts waiting to be shown
 //   ChatApp.cs         the "Chat" phone app (customers, waiting list, top spenders, feed)
 //   Mugger.cs          !mug: cartel goons sent after a player (host only)
+//   CustomerStatus.cs  when a customer will turn up (status words), the order nudge, the Find marker
 //   LobbySync.cs       co-op: the host shares names / lists, clients forward joins and mugs
 //
 // Unity and game objects may only be used on the main thread, so the HTTP thread only reads and
@@ -20,7 +21,7 @@
 using System;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.3.0", "sensokasucks",
+[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.4.0", "sensokasucks",
     "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
@@ -41,6 +42,10 @@ namespace FridgeSchedule1
         private Mugger _mugger;
         private LobbySync _lobby;
         private bool _inWorld;                // a save is loaded (scene "Main")
+        // Order nudges waiting for their pause (real-time seconds), from POST /nudge; RunDueNudges.
+        private const float NudgeDelaySec = 8f;
+        private readonly System.Collections.Generic.List<(float due, string npc)> _nudges =
+            new System.Collections.Generic.List<(float, string)>();
         private float _nextRefresh;
 
         public override void OnInitializeMelon()
@@ -78,6 +83,7 @@ namespace FridgeSchedule1
             else
                 _watcher.OnWorldUnloaded();
             _mugger.Clear();
+            _nudges.Clear();
             _nextRefresh = 0f;
         }
 
@@ -107,6 +113,27 @@ namespace FridgeSchedule1
                 _lobby.Tick();     // before Refresh, so a client applies the host's latest names
             _watcher.Refresh();
             _mugger.Tick();
+            RunDueNudges();
+        }
+
+        // Order nudges (POST /nudge) whose pause is over: the customer texts an order now, unless the
+        // game's rules say no (CustomerStatus.Nudge). Answer: event "nudge_result" for plugin.py.
+        private void RunDueNudges()
+        {
+            var now = UnityEngine.Time.realtimeSinceStartup;
+            for (int i = _nudges.Count - 1; i >= 0; i--)
+            {
+                if (_nudges[i].due > now)
+                    continue;
+                var id = _nudges[i].npc;
+                _nudges.RemoveAt(i);
+                var (customer, npc) = _watcher.Find(id);
+                var why = _inWorld ? CustomerStatus.Nudge(customer, npc) : "no save is loaded";
+                if (why.Length > 0)
+                    LoggerInstance.Msg($"order nudge for {id} skipped: {why}");
+                Shared.AddEvent("nudge_result", new System.Collections.Generic.Dictionary<string, object>
+                    { ["npc"] = id, ["ok"] = why.Length == 0, ["msg"] = why });
+            }
         }
 
         // A request from this player's Core (BridgeServer POST /mug, /remote). On a co-op client every
@@ -114,6 +141,22 @@ namespace FridgeSchedule1
         // LobbySync turns into the same mug_result / mug_outcome events as below.
         private void HandleRequest(CoreRequest r)
         {
+            if (r.type == "find")
+            {
+                // this player's own map, host or guest
+                var npc = _watcher.Find(r.npc).npc;
+                Shared.AddFeed(CustomerStatus.Mark(npc, string.IsNullOrEmpty(r.by) ? npc?.FullName ?? r.npc : r.by)
+                    ? $"{r.by} is marked on your map" : $"couldn't find {r.by} in this save");
+                return;
+            }
+            if (r.type == "nudge")
+            {
+                // host only: a guest's Core never assigns, so never asks. A short pause first so the
+                // text doesn't land in the same second as the new name.
+                if (Shared.Role != "client")
+                    _nudges.Add((UnityEngine.Time.realtimeSinceStartup + NudgeDelaySec, r.npc));
+                return;
+            }
             if (Shared.Role == "client")
             {
                 _lobby.Send(r);

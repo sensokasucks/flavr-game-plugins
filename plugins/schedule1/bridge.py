@@ -11,6 +11,11 @@ Both answer on ``schedule1.bridge_url`` (default http://127.0.0.1:3857):
   POST /notify               {"title", "text"}: a stream alert to pop up on the in-game phone
   POST /mug                  {"id", "by", "goons"}: !mug; answers arrive as mug_result / mug_outcome events
   POST /remote               {"type": "join" | "leave", chatter fields}: co-op client -> host's list
+  POST /nudge                {"npc"}: newly named customer texts an order (nudge_result event)
+  POST /find                 {"npc", "by"}: mark the customer on the streamer's phone map
+
+Each GET /customers entry also has "status" (locked / deal / offer / dealer / waiting) and
+"status_text" ("deal set for 16:30-18:00 at the Docks"), made by the mod's CustomerStatus.cs.
 
 GET /customers also carries "role" ("host", or "client" in someone else's co-op game: the host's
 mod decides names then, and plugin.py only forwards joins) and "board" (the shared lists).
@@ -84,6 +89,15 @@ class Bridge:
         return await self._call("POST", "/remote", json={
             "type": kind, "platform": platform, "user_id": user_id, "username": username,
             "display_name": display_name, "is_sub": bool(is_sub)})
+
+    async def nudge(self, npc_id: str) -> dict:
+        """A newly named, met customer texts an order soon (setting nudge_new; host only). Answered
+        by event "nudge_result" {"npc", "ok", "msg"} (plugin.py handle_event)."""
+        return await self._call("POST", "/nudge", json={"npc": npc_id})
+
+    async def find(self, npc_id: str, label: str) -> dict:
+        """Mark that customer on the streamer's in-game phone map (page Find button)."""
+        return await self._call("POST", "/find", json={"npc": npc_id, "by": label})
 
     async def notify(self, title: str, text: str) -> dict:
         """Pop a stream alert up on the in-game phone (plugin.py _on_alert)."""

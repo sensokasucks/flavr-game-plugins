@@ -36,21 +36,32 @@
       const cust = p.npc_id
         ? (p.in_game ? escapeHtml(p.customer) : escapeHtml(p.npc_id) + " (not in this save)")
         : "waiting";
+      // "When they turn up": the mod's status words (plugin.py snapshot "status", mod CustomerStatus.cs).
+      // Find marks the customer on the in-game phone map (POST /api/schedule1/customers/find).
       return `<tr>
         <td>${escapeHtml(p.name)}</td>
         <td>${escapeHtml(p.platform)}</td>
         <td class="${p.npc_id ? "" : "waiting"}">${cust}</td>
+        <td class="muted">${escapeHtml(p.status || "")}</td>
         <td>${p.deals}</td>
         <td>${money(p.spent)}</td>
-        <td><button type="button" data-key="${escapeHtml(p.key)}">Remove</button></td>
+        <td>${p.in_game ? `<button type="button" data-find="${escapeHtml(p.key)}">Find</button> ` : ""}<button type="button" data-key="${escapeHtml(p.key)}">Remove</button></td>
       </tr>`;
     });
     $("people").querySelector("tbody").innerHTML = rows.join("") ||
-      '<tr><td colspan="6" class="waiting">Nobody yet. Chat types !customer to join.</td></tr>';
+      '<tr><td colspan="7" class="waiting">Nobody yet. Chat types !customer to join.</td></tr>';
     resize();
   }
 
   $("people").addEventListener("click", async (ev) => {
+    const f = ev.target.closest("button[data-find]");
+    if (f) {
+      try {
+        const r = await api("/api/schedule1/customers/find", { method: "POST", body: JSON.stringify({ key: f.dataset.find }) });
+        say(r.ok ? "Marked on your in-game phone map." : "That customer isn't in the game right now.");
+      } catch (e) { say(String(e.message || e)); }
+      return;
+    }
     const b = ev.target.closest("button[data-key]");
     if (!b) return;
     try {

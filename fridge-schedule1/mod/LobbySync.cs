@@ -223,10 +223,10 @@ namespace FridgeSchedule1
             return null;
         }
 
-        // The board as compact JSON under MaxValueBytes; rows [name, platform, customer, deals, spent, npc, key].
+        // The board as compact JSON under MaxValueBytes; rows [name, platform, customer, deals, spent, npc, key, status].
         private static string Shrink(Board b)
         {
-            object Row(BoardRow r) => new object[] { r.name, r.platform, r.customer, r.deals, Math.Round(r.spent), r.npc ?? "", r.key ?? "" };
+            object Row(BoardRow r) => new object[] { r.name, r.platform, r.customer, r.deals, Math.Round(r.spent), r.npc ?? "", r.key ?? "", r.status ?? "" };
             var waiting = b.waiting.Select(Row).ToList();
             while (true)
             {
@@ -306,6 +306,7 @@ namespace FridgeSchedule1
                 {
                     name = r[0].GetString(), platform = r[1].GetString(), customer = r[2].GetString(),
                     deals = r[3].GetInt32(), spent = r[4].GetDouble(), npc = r[5].GetString(), key = r[6].GetString(),
+                    status = r.GetArrayLength() > 7 ? r[7].GetString() : "",   // older hosts send 7 fields
                 });
             }
             return list;

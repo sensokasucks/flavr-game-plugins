@@ -47,17 +47,28 @@ namespace FridgeSchedule1
         private int _lastCount = -1;
         private int _lastUnwrapped = -1;
         private readonly Dictionary<string, Dictionary<string, object>> _lastOrder = new Dictionary<string, Dictionary<string, object>>();
+        // Every customer seen by the last Refresh (npc id -> game objects), for the order nudge and Find.
+        private readonly Dictionary<string, (S1Customer customer, S1NPC npc)> _byId = new Dictionary<string, (S1Customer, S1NPC)>();
 
         public CustomerWatcher(MelonLogger.Instance log)
         {
             _log = log;
+            Instance = this;
         }
+
+        /// <summary>The one watcher (Core makes it); ChatApp uses it for the Find button and distances.</summary>
+        internal static CustomerWatcher Instance { get; private set; }
+
+        /// <summary>A customer by NPC id from the last Refresh; (null, null) when not in this save.</summary>
+        public (S1Customer customer, S1NPC npc) Find(string id) =>
+            id != null && _byId.TryGetValue(id, out var c) ? c : (null, null);
 
         public void OnWorldLoaded()
         {
             _loaded = true;
             _hooked.Clear();
             _applied.Clear();     // fresh NPC objects: nothing of ours is on them yet
+            _byId.Clear();
         }
 
         public void OnWorldUnloaded()
@@ -65,6 +76,7 @@ namespace FridgeSchedule1
             _loaded = false;
             _hooked.Clear();
             _applied.Clear();
+            _byId.Clear();
             Shared.SetCustomers(false, new List<CustomerInfo>());
         }
 
@@ -107,13 +119,18 @@ namespace FridgeSchedule1
                     Hook(customer, id);
                     KeepName(wrapper, id);
                     var own = _originals[id];
+                    bool unlocked = npc.RelationData != null && npc.RelationData.Unlocked;
+                    var (code, text) = CustomerStatus.Describe(customer, npc, unlocked);
+                    _byId[id] = (customer, npc);
                     list.Add(new CustomerInfo
                     {
                         id = id,
                         first = own.first,
                         last = own.last,
                         shown = wrapper.FullName ?? "",
-                        unlocked = npc.RelationData != null && npc.RelationData.Unlocked,
+                        unlocked = unlocked,
+                        status = code,
+                        statusText = text,
                     });
                 }
                 catch (Exception ex)

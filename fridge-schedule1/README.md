@@ -76,6 +76,28 @@ Off by default. On Core's Schedule I card:
 0 turns a trigger off; both can be on. Nobody is moved while nobody is waiting. Deals and money spent stay
 with the chatter for `!topcustomers`. Chat hears "zackfan99's shift is over, bea takes over Kyle Cooley."
 
+## When will they turn up?
+
+Every named customer has a status, worked out by the mod from the game's own data
+(`mod/CustomerStatus.cs`). It shows on the Schedule I page ("When they turn up"), in the phone's Chat app,
+and in the chatter's `!customer` reply:
+
+- **not met yet: walk up and offer a sample (lives in Westville)**
+- **texted you an order, waiting for your reply**
+- **deal set for 16:30-18:00 at the Docks**
+- **next order expected tomorrow around 18:00 (in about 20 in-game hours)**: from the customer's own order
+  days and order time. "Expected", because the game still decides on the day (relationship, addiction).
+- **buys from your dealer Benji**
+
+**Newly named customers text you an order soon** (Settings tab, Joining box, on by default): when a chatter's
+name lands on a customer you've already met, that customer texts you an order a few seconds later and chat
+hears "zackfan99 just texted the streamer for an order". The game's rules still apply: nothing happens if they
+already have a deal, an open order, a dealer, or just finished a deal, or if you're knocked out or arrested.
+In co-op only the host's setting counts.
+
+**Find** (phone app and the page): puts a marker that follows that customer on your phone's map. The phone
+list also says how far away they are ("230 m north-east").
+
 ## The Chat app on your phone
 
 The mod adds a **Chat** app (purple speech bubble) to the in-game phone:
@@ -151,12 +173,14 @@ and checks `X-Fridge-Token` when a Token is set.
 | | |
 |-|-|
 | `GET /health` | `{"ok": true}` |
-| `GET /customers` | `{"loaded", "boot", "customers": [{"id", "first", "last", "shown", "unlocked"}]}`; `first`/`last` are the customer's own name, `shown` what the game shows now |
+| `GET /customers` | `{"loaded", "boot", "customers": [{"id", "first", "last", "shown", "unlocked", "status", "status_text"}]}`; `first`/`last` are the customer's own name, `shown` what the game shows now, `status` one of `locked` / `deal` / `offer` / `dealer` / `waiting` with `status_text` in words |
 | `POST /names` | `{"names": {"kyle_cooley": {"first": "zackfan99", "last": ""}}}`, the full set: customers not listed get their own name back |
 | `GET /events?after=N` | `{"boot", "last", "events": [...]}`; `type` is `contract` (order texted), `deal` (went through) or `unlocked` (met someone new), with `id`, `name`, `qty`, `products`, `payment`; or `app_remove` / `app_swap` with `key` (phone app buttons) |
 | `POST /board` | `{"named", "waiting", "top"}`, rows `{"key", "name", "platform", "customer", "deals", "spent"}`: what the phone app lists |
 | `POST /notify` | `{"title", "text"}`: a stream alert to pop up on the phone |
 | `POST /mug` | `{"id", "by", "goons"}`: !mug; answered by events `mug_result` (`mug`, `ok`, `msg`) and later `mug_outcome` (`mug`, `outcome`: `won` / `lost` / `left`) |
+| `POST /nudge` | `{"npc"}`: newly named, met customer texts an order (host only); answered by event `nudge_result` (`npc`, `ok`, `msg`) |
+| `POST /find` | `{"npc", "by"}`: map marker on that customer for this player, labelled `by` |
 | `POST /remote` | `{"type": "join" / "leave", "platform", "user_id", "username", "display_name", "is_sub"}`: co-op guest only, passed to the host (whose Core gets `remote_join` / `remote_leave` events) |
 
 `GET /customers` also has `role` (`host`, or `client` when this game is a guest in a friend's lobby) and

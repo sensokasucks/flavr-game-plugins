@@ -269,6 +269,7 @@ class Schedule1Customers(BasePlugin):
         if pairs:
             await self.roster.assign(pairs)
             people = await self.roster.all()
+            await self._nudge(pairs)
         if pairs or rotated:
             await self._announce_new(pairs, people, rotated)
         names = desired_names(self._customers, people,
@@ -296,10 +297,13 @@ class Schedule1Customers(BasePlugin):
                     "platform": r["platform"],
                     "customer": f"{cust.get('first', '')} {cust.get('last', '')}".strip() if cust else "",
                     "npc": r["npc_id"] or "",     # a co-op client's Core maps its chatters with it
+                    "status": str(cust.get("status_text") or "") if cust else "",   # when they'll turn up
                     "deals": int(r["deals"] or 0), "spent": float(r["spent"] or 0)}
 
         named = [row(r, by_id[r["npc_id"]]) for r in people if r["npc_id"] in by_id]
         waiting = [row(r) for r in people if not r["npc_id"]]
+        for i, w in enumerate(waiting, 1):
+            w["status"] = f"#{i} waiting for a free customer"
         top = [row(r, by_id.get(r["npc_id"] or "")) for r in await self.roster.top(BOARD_TOP)]
         return {"named": named, "waiting": waiting, "top": top}
 
@@ -331,6 +335,22 @@ class Schedule1Customers(BasePlugin):
         for old in rotated.values():          # shift ended but nobody took that customer (max_named)
             await self._say_to(old, f"{clean_name(old['display_name'], old['username'])}'s shift is over; "
                                     f"back on the waiting list.")
+
+    def status_of(self, npc_id: Optional[str]) -> str:
+        """When this customer will turn up, in words (the mod's GET /customers "status_text"), or ""."""
+        cust = next((c for c in self._customers if c["id"] == npc_id), None) if npc_id else None
+        return str(cust.get("status_text") or "") if cust else ""
+
+    async def _nudge(self, pairs: list[tuple[str, str]]) -> None:
+        """``nudge_new`` (on by default): customers who just got a chatter's name and are already met
+        text the streamer an order soon (mod POST /nudge; the game's own rules may still say no).
+        Host only: a co-op guest's Core never assigns. Answer: "nudge_result" (handle_event)."""
+        if not self._s().get("nudge_new", True):
+            return
+        met = {c["id"] for c in self._customers if c.get("unlocked")}
+        for _key, npc in pairs:
+            if npc in met:
+                await self.bridge.nudge(npc)
 
     async def _say_to(self, row: dict, text: str) -> None:
         """A chat line about this chatter, in their own chat. Chatters who joined from a co-op friend's
@@ -375,6 +395,12 @@ class Schedule1Customers(BasePlugin):
             return
         if kind in ("mug_result", "mug_outcome"):
             await self._mug_answer(kind, ev)
+            return
+        if kind == "nudge_result":
+            row = await self.roster.by_npc(npc or str(ev.get("npc") or ""))
+            if ev.get("ok") and row and not self._row_hidden(row) and s.get("announce_new", True):
+                await self._say_to(row, f"{clean_name(row['display_name'], row['username'])} just texted "
+                                        f"the streamer for an order.")
             return
         if kind == "deal":
             row = await self.roster.record_deal(npc, float(ev.get("payment") or 0))
@@ -655,15 +681,19 @@ class Schedule1Customers(BasePlugin):
                                            is_sub=bool(getattr(u, "is_subscriber", False)))
         if self.role == "client":
             if row["npc_id"]:
-                return {"success": True, "reply": f"@{who} you're already a customer in the co-op game."}
+                status = self.status_of(row["npc_id"])
+                return {"success": True, "reply": f"@{who} you're already a customer in the co-op game."
+                                                  + (f" Your customer: {status}." if status else "")}
             ok = await self._forward("join", plat, u.id, u.username, u.display_name,
                                      bool(getattr(u, "is_subscriber", False)))
             return {"success": True, "reply": f"@{who} you're on the co-op game's customer list. "
                                               f"Your name shows up on a customer soon." if ok else
                                               f"@{who} the game isn't reachable right now, try again later."}
         if row["npc_id"]:
+            status = self.status_of(row["npc_id"])
             return {"success": True, "reply": f"@{who} you're already a customer: {row['deals']} deals, "
-                                              f"{money(row['spent'])} spent. (!customer leave to stop)"}
+                                              f"{money(row['spent'])} spent." + (f" Your customer: {status}." if status else "")
+                                              + " (!customer leave to stop)"}
         if new:
             self._wake.set()
         place = await self.roster.position(key)
@@ -700,6 +730,7 @@ class Schedule1Customers(BasePlugin):
                 "display_name": r["display_name"], "name": clean_name(r["display_name"], r["username"]),
                 "npc_id": r["npc_id"], "customer": f"{cust.get('first', '')} {cust.get('last', '')}".strip() if cust else "",
                 "in_game": bool(cust), "deals": r["deals"], "spent": r["spent"], "joined_at": r["joined_at"],
+                "status": str(cust.get("status_text") or "") if cust else "",
             })
         return {"connected": self.connected, "loaded": self._loaded, "error": self.last_error,
                 "customers_in_game": len(self._customers), "named": len(self._sent or {}),
@@ -716,6 +747,14 @@ class Schedule1Customers(BasePlugin):
         row, _new = await self.roster.join(plat, "", username, username)
         self._wake.set()
         return row
+
+    async def find_person(self, key: str) -> bool:
+        """Page Find button: mark this chatter's customer on the streamer's in-game phone map."""
+        row = await self.roster.get(key)
+        if not row or not row["npc_id"] or self.bridge is None:
+            return False
+        await self.bridge.find(row["npc_id"], clean_name(row["display_name"], row["username"]))
+        return True
 
     async def remove_person(self, key: str) -> bool:
         gone = await self.roster.leave(key)

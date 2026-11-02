@@ -17,6 +17,8 @@ namespace FridgeSchedule1
         public string last;      // the customer's own last name
         public string shown;     // the name the game shows right now
         public bool unlocked;    // the streamer has met them (they're in the phone's contacts)
+        public string status;    // "locked" / "deal" / "offer" / "dealer" / "waiting" (CustomerStatus.Describe)
+        public string statusText;// the same in words: "deal set for 16:30-18:00 at the Docks" ("status_text" in JSON)
     }
 
     /// <summary>A name Core wants on a customer (POST /names).</summary>
@@ -35,6 +37,7 @@ namespace FridgeSchedule1
         public string customer;  // the customer's own name ("Kyle Cooley"); empty while waiting
         public string npc;       // the customer's game id ("kyle_cooley"); empty while waiting.
                                  // A client streamer's Core uses it to find its own chatters' customers.
+        public string status;    // when they'll turn up, in words (CustomerStatus.Describe via plugin.py board())
         public int deals;
         public double spent;     // in-game dollars
     }
@@ -52,7 +55,8 @@ namespace FridgeSchedule1
     /// (POST /remote). LobbySync.cs sends client requests to the host.</summary>
     internal sealed class CoreRequest
     {
-        public string type;       // "mug", "join" or "leave"
+        public string type;       // "mug", "join", "leave", "nudge" (POST /nudge) or "find" (POST /find)
+        public string npc;        // nudge / find: the customer's NPC id; find: label in "by"
         public long id;           // Core's own number for a mug; results come back with it
         public string by;         // mug: the redeemer's name (put on the goons)
         public int goons;         // mug: how many goons (Core's mug_goons setting)

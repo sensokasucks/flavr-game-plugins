@@ -20,6 +20,9 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] `!mug`: `mug_enabled` default **false**. Price is the `mug_cost` setting (commands.json `cost` stays 0: Core's
       cost field only gates). Refund + chat line when the game refuses or doesn't answer within 30 s. Goons run on
       the host only; their own names come back when the mugging ends.
+- [ ] Customer status (`status` codes locked / deal / offer / dealer / waiting + `status_text`) comes from the mod's
+      CustomerStatus.cs only; plugin.py, the board, the page and the mock just pass the words on. `nudge_new` default
+      **true**, host only, uses the game's own ForceDealOffer after the same guards (no deal / offer / dealer, cooldown).
 - [ ] Settings: everything but `bridge_url` / `bridge_token` is `"page": true` (Schedule I page, Settings tab).
 - [ ] Regulars live in their own DLL (`regulars/`, FridgeRegulars.dll) so leaving it out turns them off. Their ids
       `fridge_regular_01`..`10` are save data: never rename. Save names stay neutral ("Regular N"). README warns that
@@ -48,6 +51,9 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] With **Show stream alerts on the in-game phone** ticked, an Alerts-page test alert pops up on the phone and in the feed.
 - [ ] `!mug` (enabled, with points): goons come out of a nearby building, are called "<chatter>'s crew", and the
       outcome line arrives; with a knocked-out player it refunds.
+- [ ] A newly named met customer texts an order within ~10 s and chat says "just texted the streamer"; the
+      status column / phone list change from "next order expected ..." to "texted you an order" to "deal set for ...".
+      Find puts a marker on the phone map that follows the customer.
 - [ ] Regulars: `FridgeRegulars` loads, "N customers found" grows by 10, each Regular walks between home and its
       hangouts (not standing at the Northtown fallback spot), can be approached for a sample, and takes a chatter name.
 - [ ] Co-op with two players: the guest sees the host's chatter names and Chat app lists; a guest chatter's

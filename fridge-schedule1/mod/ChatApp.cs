@@ -32,6 +32,7 @@ namespace FridgeSchedule1
         private static readonly Color TabOff = new Color(0.22f, 0.22f, 0.27f);
         private static readonly Color RemoveColor = new Color(0.6f, 0.2f, 0.2f);
         private static readonly Color SwapColor = new Color(0.25f, 0.4f, 0.6f);
+        private static readonly Color FindColor = new Color(0.25f, 0.5f, 0.3f);
 
         /// <summary>The app as S1API created it for the current world; null on the main menu.</summary>
         internal static ChatApp Current { get; private set; }
@@ -157,15 +158,30 @@ namespace FridgeSchedule1
         private void CustomerRow(BoardRow r)
         {
             var row = UIFactory.Panel("Row", _list, RowColor);
-            row.AddComponent<LayoutElement>().minHeight = 56;
+            row.AddComponent<LayoutElement>().minHeight = 76;
             UIFactory.HorizontalLayoutOnGO(row, 10, 14, 10, 6, 6);
             var hl = row.GetComponent<HorizontalLayoutGroup>();
             hl.childControlWidth = true;
             hl.childForceExpandWidth = false;
 
-            var t = UIFactory.Text("Text", $"{r.name} ({r.platform})  ->  {r.customer}\n{r.deals} deals, ${r.spent:0}",
-                row.transform, 18, TextAnchor.MiddleLeft);
+            // Line 2: when they'll turn up (CustomerStatus.Describe, via Core's board) and how far away.
+            var npc = CustomerWatcher.Instance?.Find(r.npc).npc;
+            var away = CustomerStatus.Distance(npc);
+            var t = UIFactory.Text("Text",
+                $"{r.name} ({r.platform})  ->  {r.customer}   {r.deals} deals, ${r.spent:0}\n" +
+                $"{r.status}{(away.Length > 0 ? "  ·  " + away : "")}",
+                row.transform, 17, TextAnchor.MiddleLeft);
             t.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+
+            // Find: a marker that follows the customer on this player's phone map (host and guests).
+            var (fgo, fbtn, _) = UIFactory.ButtonWithLabel("Find", "Find", row.transform, FindColor, 80, 44);
+            Fixed(fgo, 80, 44);
+            ButtonUtils.AddListener(fbtn, () =>
+            {
+                Shared.AddFeed(CustomerStatus.Mark(CustomerWatcher.Instance?.Find(r.npc).npc, $"{r.name} ({r.customer})")
+                    ? $"{r.name} ({r.customer}) is marked on your map" : $"can't find {r.customer} right now");
+                _dirty = true;
+            });
             if (Shared.Role == "client")
                 return;          // co-op guest: the list is the host's (LobbySync.cs), so only the host edits it
 
