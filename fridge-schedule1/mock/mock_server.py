@@ -21,6 +21,14 @@ Lets you test Stream Core's Schedule I plugin (plugins/schedule1) without Schedu
   GET /customers entries carry "status" / "status_text" like the mod's CustomerStatus.cs (simplified)
   POST /remote               co-op client join / leave (kept in World.remote_requests); World.role = "client"
                              makes the mock act as a guest in a friend's game
+  GET  /crew                 3 workers, 2 recruited dealers, 2 met suppliers (like the mod's Crew.cs / Drops.cs)
+  POST /crewnames            names on workers / dealers (World.staff_names / World.dealer_names)
+  POST /drop                 cash in a dead drop: "drop_result" at once (World.drop_refusal refuses);
+                             World.take_drop() fakes the pick-up ("drop_taken")
+  POST /supplier             !tab / !supply: "supplier_result" at once (pays debt, or "delivers" to a drop)
+  POST /mixpick              chat's ingredient vote (kept in World.mixpicks); World.mixpick_button() fakes the
+                             mixing station's "Let chat pick" button, World.mixpick_stop() pressing it again
+  World.staff_job(), dealer_sale(), dealer_robbed(), dealer_empty() fake the crew's game events
 
 Fake world: 18 customers (2 of them Regulars), 6 already met. Every ``--every`` seconds (default 15) a met customer
 texts an order, and the deal goes through a few seconds later; now and then you meet someone new.
@@ -63,6 +71,15 @@ CUSTOMERS = [
 ]
 MET_AT_START = 6
 PRODUCTS = ["OG Kush", "Sour Diesel", "Green Crack", "Granddaddy Purple", "Meth", "Cocaine"]
+# The crew (ids and fields as the mod's GET /crew): workers, recruited dealers, suppliers.
+STAFF = [("emp_botanist_1", "Dave", "Miller", "botanist", "Barn"),
+         ("emp_chemist_1", "Rosa", "Diaz", "chemist", "Barn"),
+         ("emp_packager_1", "Tom", "Ng", "packager", "Bungalow")]
+DEALERS = [("benji_coleman", "Benji", "Coleman"), ("molly_presley", "Molly", "Presley")]
+SUPPLIERS = [("albert_hoover", "Albert", "Hoover", 300.0, ["OG Kush Seed", "Sour Diesel Seed"]),
+             ("shirley_watts", "Shirley", "Watts", 0.0, ["Pseudo"])]
+INGREDIENTS = ["Addy", "Banana", "Battery", "Chili", "Cuke", "Donut", "Energy Drink", "Flu Medicine", "Gasoline",
+               "Horse Semen", "Iodine", "Mega Bean", "Motor Oil", "Mouth Wash", "Paracetamol", "Viagra"]
 
 
 class World:
@@ -94,6 +111,17 @@ class World:
         self.finds: list[dict] = []                   # every POST /find
         self.mixvotes: list[dict] = []                # every POST /mixvote (the vote's state as the mod gets it)
         self.products: list[str] = ["OG Kush", "Sour Diesel"]   # product names "in the save"
+        # crew (GET /crew) and what Core asked for
+        self.staff = [{"id": i, "first": f, "last": l, "type": t, "property": prop} for i, f, l, t, prop in STAFF]
+        self.dealers = [{"id": i, "first": f, "last": l, "cash": 0.0, "stock": 20, "customers": 3} for i, f, l in DEALERS]
+        self.suppliers = [{"id": i, "first": f, "last": l, "unlocked": True, "debt": d, "goods": g}
+                          for i, f, l, d, g in SUPPLIERS]
+        self.staff_names: dict[str, dict] = {}        # last POST /crewnames "staff"
+        self.dealer_names: dict[str, dict] = {}       # last POST /crewnames "dealers"
+        self.drops: list[dict] = []                   # every POST /drop (and supplier deliveries), with "where"
+        self.drop_refusal = ""                        # set to refuse the next drops with this text
+        self.supplier_requests: list[dict] = []       # every POST /supplier
+        self.mixpicks: list[dict] = []                # every POST /mixpick
 
     def shown(self, cust: dict) -> str:
         """The name the game would show now (Core's name, else the customer's own)."""
@@ -195,6 +223,104 @@ class World:
                         break
         return {"success": True}
 
+    # ---- crew, drops, suppliers, ingredient vote (the mod's Crew.cs, Drops.cs, MixPicker.cs)
+
+    def crew(self) -> dict:
+        """GET /crew: own names in "first" / "last", the name on screen in "shown"."""
+        def shown(x: dict, names: dict) -> str:
+            n = names.get(x["id"])
+            return f"{n['first']} {n['last']}".strip() if n else f"{x['first']} {x['last']}"
+        with self.lock:
+            return {"loaded": True, "boot": self.boot,
+                    "staff": [dict(x, shown=shown(x, self.staff_names)) for x in self.staff],
+                    "dealers": [dict(x, shown=shown(x, self.dealer_names)) for x in self.dealers],
+                    "suppliers": [{k: v for k, v in x.items() if k != "goods"} for x in self.suppliers]}
+
+    def crew_names(self, body: dict) -> dict:
+        """POST /crewnames: a list that's sent replaces that list; one left out stays as it was."""
+        with self.lock:
+            if isinstance(body.get("staff"), dict):
+                self.staff_names = {k: dict(v) for k, v in body["staff"].items() if isinstance(v, dict)}
+            if isinstance(body.get("dealers"), dict):
+                self.dealer_names = {k: dict(v) for k, v in body["dealers"].items() if isinstance(v, dict)}
+        return {"success": True}
+
+    def drop(self, body: dict) -> dict:
+        """POST /drop: answer "drop_result" at once (the real mod picks a dead drop and fills it)."""
+        with self.lock:
+            ok = not self.drop_refusal
+            where = "the dead drop behind the motel"
+            if ok:
+                self.drops.append(dict(body, where=where))
+            self.add_event({"type": "drop_result", "drop": int(body.get("id") or 0), "ok": ok,
+                            "msg": "" if ok else self.drop_refusal, "where": where if ok else ""})
+        return {"success": True}
+
+    def supplier(self, body: dict) -> dict:
+        """POST /supplier: "pay" lowers the debt (never below 0), "deliver" fills a drop with goods."""
+        with self.lock:
+            self.supplier_requests.append(body)
+            sup = next((x for x in self.suppliers if x["id"] == body.get("supplier")), None)
+            ev = {"type": "supplier_result", "req": int(body.get("id") or 0), "ok": False, "msg": "", "paid": 0,
+                  "debt": 0, "where": "", "what": ""}
+            if sup is None or not sup["unlocked"]:
+                ev["msg"] = "the streamer hasn't met that supplier"
+            elif body.get("action") == "pay":
+                paid = min(float(body.get("amount") or 0), sup["debt"])
+                if paid <= 0:
+                    ev["msg"] = "nothing is owed"
+                else:
+                    sup["debt"] -= paid
+                    ev.update(ok=True, paid=paid, debt=sup["debt"])
+            elif body.get("action") == "deliver":
+                what = f"{int(body.get('qty') or 1)}x {sup['goods'][0]}"
+                self.drops.append({"id": int(body.get("id") or 0), "by": body.get("by"), "what": what,
+                                   "where": "the dead drop under the bridge"})
+                ev.update(ok=True, where="the dead drop under the bridge", what=what)
+            else:
+                ev["msg"] = "action must be pay or deliver"
+            self.add_event(ev)
+        return {"success": True}
+
+    def mixpick(self, body: dict) -> dict:
+        with self.lock:
+            self.mixpicks.append(body)
+        return {"success": True}
+
+    def take_drop(self, drop_id: int) -> dict:
+        """The streamer emptied a drop (cash drop or supplier delivery)."""
+        with self.lock:
+            return self.add_event({"type": "drop_taken", "drop": int(drop_id)})
+
+    def mixpick_button(self, carried: list[str] | None = None, product: str = "OG Kush") -> dict:
+        """The streamer pressed "Let chat pick" on a mixing station (fields as MixPicker.cs sends)."""
+        with self.lock:
+            have = carried if carried is not None else ["Cuke", "Banana", "Gasoline"]
+            # "nearby" / "owned": in storage near the station / at any owned property (IngredientSources.cs)
+            return self.add_event({"type": "mixpick", "product": product, "carried": have,
+                                   "nearby": ["Iodine"], "owned": ["Iodine", "Mega Bean"],
+                                   "all": list(INGREDIENTS)})
+
+    def mixpick_stop(self) -> dict:
+        with self.lock:
+            return self.add_event({"type": "mixpick_stop"})
+
+    def staff_job(self, emp_id: str, job: str = "harvested a plant") -> dict:
+        with self.lock:
+            return self.add_event({"type": "staff_job", "id": emp_id, "job": job})
+
+    def dealer_sale(self, dealer_id: str, amount: float, deals: int = 1) -> dict:
+        with self.lock:
+            return self.add_event({"type": "dealer_sale", "id": dealer_id, "amount": float(amount), "deals": deals})
+
+    def dealer_robbed(self, dealer_id: str, cash: float, items: int = 0) -> dict:
+        with self.lock:
+            return self.add_event({"type": "dealer_robbed", "id": dealer_id, "cash": float(cash), "items": items})
+
+    def dealer_empty(self, dealer_id: str) -> dict:
+        with self.lock:
+            return self.add_event({"type": "dealer_empty", "id": dealer_id})
+
     # ---- the fake game's activity (also called straight from tests)
 
     def mix_button(self, game_names: list[str] | None = None) -> dict:
@@ -294,6 +420,8 @@ def make_handler(world: World, token: str = ""):
                 return
             if url.path == "/customers":
                 self._send(200, world.snapshot())
+            elif url.path == "/crew":
+                self._send(200, world.crew())
             elif url.path == "/events":
                 try:
                     after = int((parse_qs(url.query).get("after") or ["0"])[0])
@@ -307,10 +435,11 @@ def make_handler(world: World, token: str = ""):
             if not self._allowed():
                 return
             path = urlparse(self.path).path
-            if path not in ("/names", "/board", "/notify", "/mug", "/remote", "/nudge", "/find", "/mixvote"):
+            if path not in ("/names", "/board", "/notify", "/mug", "/remote", "/nudge", "/find", "/mixvote",
+                            "/crewnames", "/drop", "/supplier", "/mixpick"):
                 self._send(404, {"success": False, "error": "not found"})
                 return
-            if path in ("/names", "/board") and world.role == "client":
+            if path in ("/names", "/board", "/crewnames") and world.role == "client":
                 self._send(409, {"success": False, "error": "this game is a co-op client: the host decides names"})
                 return
             length = min(int(self.headers.get("Content-Length") or 0), 256 * 1024)
@@ -333,6 +462,18 @@ def make_handler(world: World, token: str = ""):
             elif path == "/mixvote":
                 print(f"mix name vote: {body.get('state')} {[o.get('name') for o in body.get('options') or []]}")
                 self._send(200, world.mixvote(body))
+            elif path == "/crewnames":
+                print(f"crew names: staff {list((body.get('staff') or {}).keys())} dealers {list((body.get('dealers') or {}).keys())}")
+                self._send(200, world.crew_names(body))
+            elif path == "/drop":
+                print(f"cash drop: ${body.get('cash')} from {body.get('by')} ({body.get('note')!r})")
+                self._send(200, world.drop(body))
+            elif path == "/supplier":
+                print(f"supplier {body.get('supplier')}: {body.get('action')} for {body.get('by')}")
+                self._send(200, world.supplier(body))
+            elif path == "/mixpick":
+                print(f"ingredient vote: {body.get('state')} {[o.get('name') for o in body.get('options') or []]}")
+                self._send(200, world.mixpick(body))
             elif path == "/find":
                 print(f"map marker on {body.get('npc')} ({body.get('by')})")
                 self._send(200, world.find(body))

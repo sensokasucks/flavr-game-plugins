@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <Reference Include="MelonLoader"><HintPath>$(MelonDir)\MelonLoader.dll</HintPath><Private>false</Private></Reference>
+    <!-- Harmony (ships with MelonLoader): RobPatch in Crew.cs hears when robbers hit a dealer -->
+    <Reference Include="0Harmony"><HintPath>$(MelonDir)\0Harmony.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Il2CppInterop.Runtime"><HintPath>$(MelonDir)\Il2CppInterop.Runtime.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>$(Il2CppDir)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
     <!-- Item definitions (BaseItemDefinition, used by Registry.GetItem(id).Name for product names) live here in current game versions -->

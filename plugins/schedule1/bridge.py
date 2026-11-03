@@ -17,6 +17,19 @@ Both answer on ``schedule1.bridge_url`` (default http://127.0.0.1:3857):
   POST /mixvote              {"state", "ends_in", "options": [{"name", "votes"}], "winner", "ranked", "confirm",
                              "msg"}: the "chat names the new mix" vote for the naming screen (mixvote.py
                              mod_state; the mod's "mix_vote" / "mix_vote_stop" events start / stop it)
+  GET  /crew                 {"loaded", "staff": [...], "dealers": [...], "suppliers": [...]}: the streamer's
+                             workers, recruited dealers and suppliers, with their own names (feature.CrewSync)
+  POST /crewnames            {"staff": {id: {"first", "last"}}, "dealers": {...}}: chatter names on workers
+                             (staff.py) and sponsor labels on dealers (dealers.py); a key left out = unchanged
+  POST /drop                 {"id", "by", "note", "cash", "label"}: cash in a dead drop (drops.py); answered by
+                             events "drop_result" {"drop", "ok", "msg", "where"} and later "drop_taken" {"drop"}
+  POST /supplier             {"id", "action": "pay" | "deliver", "supplier", "by", "amount", "qty"} (suppliers.py);
+                             answered by "supplier_result" {"req", "ok", "msg", "paid", "debt", "where", "what"}
+  POST /mixpick              {"state", "ends_in", "options": [{"name", "votes"}], "winner", "place", "msg"}: chat's
+                             ingredient vote for the mixing station screen (mixpick.py; the mod's "mixpick" /
+                             "mixpick_stop" events start / stop it)
+  (more events: "staff_job" {"id", "job"}; "dealer_sale" {"id", "amount", "deals"}, "dealer_robbed"
+   {"id", "cash", "items"}, "dealer_empty" {"id"})
 
 Each GET /customers entry also has "status" (locked / deal / offer / dealer / waiting) and
 "status_text" ("deal set for 16:30-18:00 at the Docks"), made by the mod's CustomerStatus.cs.
@@ -108,6 +121,38 @@ class Bridge:
         "Let chat name it" button and, at state "done", tries ``ranked`` names in order on the naming
         screen (pressing the game's Confirm when ``confirm`` is true). State "off" carries ``msg``."""
         return await self._call("POST", "/mixvote", json=state)
+
+    async def crew(self) -> dict:
+        """The streamer's workers, dealers and suppliers (feature.CrewSync keeps the answer in plugin.crew).
+        A mod from before these features answers 404 (BridgeError), which CrewSync tolerates."""
+        return await self._call("GET", "/crew")
+
+    async def crew_names(self, staff: Optional[dict] = None, dealers: Optional[dict] = None) -> dict:
+        """Names for workers (staff.py) and / or dealers (dealers.py): {id: {"first", "last"}}. Only the
+        lists passed are replaced; the mod gives everyone not listed their own name back."""
+        body = {}
+        if staff is not None:
+            body["staff"] = staff
+        if dealers is not None:
+            body["dealers"] = dealers
+        return await self._call("POST", "/crewnames", json=body)
+
+    async def drop(self, drop_id: int, by: str, cash: float, note: str, label: str = "Cash drop") -> dict:
+        """Cash in a dead drop (drops.py). Answered by events "drop_result" and "drop_taken"."""
+        return await self._call("POST", "/drop", json={"id": int(drop_id), "by": by, "cash": float(cash),
+                                                       "note": note, "label": label})
+
+    async def supplier(self, req_id: int, action: str, supplier_id: str, by: str, amount: float = 0,
+                       qty: int = 0) -> dict:
+        """A supplier pays off part of the streamer's tab ("pay", ``amount`` in-game $) or leaves ``qty``
+        of their goods at a dead drop ("deliver"). Answered by event "supplier_result"."""
+        return await self._call("POST", "/supplier", json={"id": int(req_id), "action": action,
+                                                           "supplier": supplier_id, "by": by,
+                                                           "amount": float(amount), "qty": int(qty)})
+
+    async def mixpick(self, state: dict) -> dict:
+        """Where chat's ingredient vote is (mixpick.py); shown on the mixing station screen."""
+        return await self._call("POST", "/mixpick", json=state)
 
     async def notify(self, title: str, text: str, **alert) -> dict:
         """Pop something up on the in-game phone. A stream alert (plugin.py _on_alert) also passes
