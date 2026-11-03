@@ -36,7 +36,13 @@ namespace FridgeSchedule1
             if (string.IsNullOrEmpty(url))
                 return null;
             if (Sprites.TryGetValue(url, out var s))
-                return s;
+            {
+                if (s != null)                      // Unity's check: false once the sprite was freed
+                    return s;
+                Sprites.Remove(url);                // freed anyway: fetch it again
+                Order.Remove(url);
+                Asked.Remove(url);
+            }
             if (Asked.Add(url))
                 Task.Run(() => Fetch(url));
             return null;
@@ -52,10 +58,21 @@ namespace FridgeSchedule1
                     var tex = new Texture2D(2, 2);
                     if (!ImageConversion.LoadImage(tex, item.data))
                         continue;                           // not a PNG / JPG
-                    Sprites[item.url] = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                    // DontUnloadUnusedAsset: keep the picture when a save loads and Unity clears
+                    // unused assets (same reason as ChatApp.Icon).
+                    tex.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                    var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                    sprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                    Sprites[item.url] = sprite;
                     Order.Add(item.url);
                     if (Order.Count > MaxPictures)
                     {
+                        // the oldest picture is dropped; free its texture since Unity no longer will
+                        if (Sprites.TryGetValue(Order[0], out var old) && old != null)
+                        {
+                            UnityEngine.Object.Destroy(old.texture);
+                            UnityEngine.Object.Destroy(old);
+                        }
                         Sprites.Remove(Order[0]);
                         Asked.Remove(Order[0]);
                         Order.RemoveAt(0);
