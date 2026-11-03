@@ -14,6 +14,10 @@ Lets you test Stream Core's Schedule I plugin (plugins/schedule1) without Schedu
                              World.mug_end() fakes the "mug_outcome"
   POST /nudge                order nudge: "nudge_result" event at once (ok for met customers)
   POST /find                 map marker request (kept in World.finds)
+  POST /mixvote              chat's vote on a new mix's name (kept in World.mixvotes; at "done" the mock
+                             "names" the mix with the first ranked name it hasn't got yet, World.products).
+                             World.mix_button() fakes the naming screen's "Let chat name it" button
+                             ("mix_vote" event), World.mix_stop() pressing it again / closing the screen
   GET /customers entries carry "status" / "status_text" like the mod's CustomerStatus.cs (simplified)
   POST /remote               co-op client join / leave (kept in World.remote_requests); World.role = "client"
                              makes the mock act as a guest in a friend's game
@@ -88,6 +92,8 @@ class World:
         self.remote_requests: list[dict] = []         # every POST /remote (client joins / leaves)
         self.nudges: list[str] = []                   # npc ids from POST /nudge
         self.finds: list[dict] = []                   # every POST /find
+        self.mixvotes: list[dict] = []                # every POST /mixvote (the vote's state as the mod gets it)
+        self.products: list[str] = ["OG Kush", "Sour Diesel"]   # product names "in the save"
 
     def shown(self, cust: dict) -> str:
         """The name the game would show now (Core's name, else the customer's own)."""
@@ -178,7 +184,31 @@ class World:
             self.finds.append(body)
         return {"success": True, "role": self.role}
 
+    def mixvote(self, body: dict) -> dict:
+        """POST /mixvote: like MixNamer.cs at state "done", use the first ranked name not taken yet."""
+        with self.lock:
+            self.mixvotes.append(body)
+            if body.get("state") == "done":
+                for name in body.get("ranked") or []:
+                    if name and name not in self.products:
+                        self.products.append(name)
+                        break
+        return {"success": True}
+
     # ---- the fake game's activity (also called straight from tests)
+
+    def mix_button(self, game_names: list[str] | None = None) -> dict:
+        """The streamer pressed "Let chat name it" on the naming screen (fields as MixNamer.cs sends)."""
+        with self.lock:
+            return self.add_event({"type": "mix_vote", "game_names": game_names or ["Hazy Kush", "Cosmic Dream", "Zesty Cake"],
+                                   "taken": list(self.products), "effects": ["Energizing", "Munchies"],
+                                   "value": "$64", "current": (game_names or ["Hazy Kush"])[0]})
+
+    def mix_stop(self, reason: str = "button") -> dict:
+        """The streamer stopped chat's vote: "button" (pressed it again) or "closed" (left the screen)."""
+        with self.lock:
+            return self.add_event({"type": "mix_vote_stop", "reason": reason})
+
 
     def mug_end(self, mug_id: int, outcome: str) -> dict:
         """How a mugging ended: "won" (streamer beat the goons), "lost" or "left"."""
@@ -277,7 +307,7 @@ def make_handler(world: World, token: str = ""):
             if not self._allowed():
                 return
             path = urlparse(self.path).path
-            if path not in ("/names", "/board", "/notify", "/mug", "/remote", "/nudge", "/find"):
+            if path not in ("/names", "/board", "/notify", "/mug", "/remote", "/nudge", "/find", "/mixvote"):
                 self._send(404, {"success": False, "error": "not found"})
                 return
             if path in ("/names", "/board") and world.role == "client":
@@ -300,6 +330,9 @@ def make_handler(world: World, token: str = ""):
             elif path == "/nudge":
                 print(f"order nudge for {body.get('npc')}")
                 self._send(200, world.nudge(body))
+            elif path == "/mixvote":
+                print(f"mix name vote: {body.get('state')} {[o.get('name') for o in body.get('options') or []]}")
+                self._send(200, world.mixvote(body))
             elif path == "/find":
                 print(f"map marker on {body.get('npc')} ({body.get('by')})")
                 self._send(200, world.find(body))

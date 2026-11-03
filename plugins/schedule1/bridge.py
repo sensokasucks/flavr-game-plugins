@@ -14,6 +14,9 @@ Both answer on ``schedule1.bridge_url`` (default http://127.0.0.1:3857):
   POST /remote               {"type": "join" | "leave", chatter fields}: co-op client -> host's list
   POST /nudge                {"npc"}: newly named customer texts an order (nudge_result event)
   POST /find                 {"npc", "by"}: mark the customer on the streamer's phone map
+  POST /mixvote              {"state", "ends_in", "options": [{"name", "votes"}], "winner", "ranked", "confirm",
+                             "msg"}: the "chat names the new mix" vote for the naming screen (mixvote.py
+                             mod_state; the mod's "mix_vote" / "mix_vote_stop" events start / stop it)
 
 Each GET /customers entry also has "status" (locked / deal / offer / dealer / waiting) and
 "status_text" ("deal set for 16:30-18:00 at the Docks"), made by the mod's CustomerStatus.cs.
@@ -99,6 +102,12 @@ class Bridge:
     async def find(self, npc_id: str, label: str) -> dict:
         """Mark that customer on the streamer's in-game phone map (page Find button)."""
         return await self._call("POST", "/find", json={"npc": npc_id, "by": label})
+
+    async def mixvote(self, state: dict) -> dict:
+        """Where chat's vote on a new mix's name is (plugin.py _mix_tick): the mod shows it under its
+        "Let chat name it" button and, at state "done", tries ``ranked`` names in order on the naming
+        screen (pressing the game's Confirm when ``confirm`` is true). State "off" carries ``msg``."""
+        return await self._call("POST", "/mixvote", json=state)
 
     async def notify(self, title: str, text: str, **alert) -> dict:
         """Pop something up on the in-game phone. A stream alert (plugin.py _on_alert) also passes

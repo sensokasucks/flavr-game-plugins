@@ -17,12 +17,17 @@ The background loop (_loop) runs every ``poll_sec`` seconds while the plugin is 
   - every pass: read new game events (orders, deals, unlocks, phone app buttons) and act on them.
 Stream alerts (follows, subs, raids, ...) reach _on_alert from Core's event bus; with
 ``alerts_in_game`` on they pop up on the in-game phone too.
+
+New mixes: the mod's "Let chat name it" button on the game's naming screen sends a "mix_vote" event;
+_mix_start runs a MixVote (mixvote.py: !mixname ideas, then !1 !2 ... votes), _mix_tick moves it on
+and sends its state to the mod (POST /mixvote) and the overlays (a "board" packet like Core's polls).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any, Optional
 
@@ -32,6 +37,7 @@ from core.plugin_api import BasePlugin
 
 from .alert_style import style_for
 from .bridge import Bridge, BridgeError
+from .mixvote import BOARD_ID as MIX_BOARD_ID, MixVote
 from .roster import Roster, clean_name, desired_names, person_key, plan_assignments, plan_rotation
 
 log = logging.getLogger("plugins.schedule1")
@@ -43,6 +49,7 @@ MUG_FORGET_SEC = 600          # !mug: stop waiting for the outcome (the mod give
 # Alert kinds sent to the game when ``alert_kinds`` is empty: every kind in core/alerts.py KINDS
 # except "flag" (custom chat flags are a moderation tool, not a celebration).
 ALERT_KINDS_SKIPPED_BY_DEFAULT = {"flag"}
+MIX_BOARD_HOLD_SEC = 10       # the mix name board stays on the overlays this long after the vote ends
 
 
 def alert_kinds(setting: Any) -> set[str]:
@@ -100,6 +107,11 @@ class Schedule1Customers(BasePlugin):
         # !mug: Core's id -> {"uid", "cost", "who", "platform", "at", "answered"} until the game answers
         self._mugs: dict[int, dict] = {}
         self._mug_ready_at = 0.0              # time.monotonic() when the next !mug may start
+        # "chat names the new mix" (mixvote.py): the round running now (None when none), when its
+        # finished board leaves the overlays (time.time()), and the mod state last sent (to skip repeats)
+        self.mix: Optional[MixVote] = None
+        self._mix_clear_at = 0.0
+        self._mix_sent: Optional[dict] = None
         self.connected = False
         self.last_error = ""
 
@@ -172,6 +184,7 @@ class Schedule1Customers(BasePlugin):
                 await self.sync()
             await self.poll_events()
             await self._expire_mugs()
+            await self._mix_tick()
             self.connected, self.last_error = True, ""
         except BridgeError as exc:
             if self.connected or not self.last_error:
@@ -406,6 +419,9 @@ class Schedule1Customers(BasePlugin):
         if kind in ("mug_result", "mug_outcome"):
             await self._mug_answer(kind, ev)
             return
+        if kind in ("mix_vote", "mix_vote_stop"):
+            await (self._mix_start(ev) if kind == "mix_vote" else self._mix_stop(ev))
+            return
         if kind == "nudge_result":
             row = await self.roster.by_npc(npc or str(ev.get("npc") or ""))
             if ev.get("ok") and row and not self._row_hidden(row) and s.get("announce_new", True):
@@ -617,9 +633,12 @@ class Schedule1Customers(BasePlugin):
     # ------------------------------------------------------------------ chat
 
     async def _on_chat(self, event) -> None:
-        """``auto_join`` setting: "subs" puts subscribers / members on the list when they chat, "everyone" anyone."""
+        """Votes for a new mix's name (!1 !2 ... while a MixVote is in its vote phase), then the
+        ``auto_join`` setting: "subs" puts subscribers / members on the list when they chat, "everyone" anyone."""
         if not self._running or self.roster is None:
             return
+        if self.mix is not None and self.mix.phase == "vote":
+            self._mix_chat_vote(event)
         mode = str(self._s().get("auto_join") or "off")
         u = getattr(event, "user", None)
         if mode == "off" or u is None or (mode == "subs" and not u.is_subscriber):
@@ -657,7 +676,7 @@ class Schedule1Customers(BasePlugin):
             self._wake.set()
 
     async def execute(self, req: ExecuteRequest) -> dict:
-        """Chat commands from commands.json: !customer [leave], !topcustomers, !mug.
+        """Chat commands from commands.json: !customer [leave], !topcustomers, !mug, !mixname <idea>.
 
         In a friend's co-op game (``role`` "client") !customer joins / leaves go to the host's list
         through our mod (_forward), and !topcustomers reads the host's list."""
@@ -667,6 +686,8 @@ class Schedule1Customers(BasePlugin):
         u = req.user
         if name == "mug" and u is not None:
             return await self._mug(req)
+        if name == "mixname" and u is not None:
+            return await self._mix_suggest(req)
         if name == "topcustomers":
             if self.role == "client":
                 top = [(r.get("name"), r.get("spent"), r.get("deals")) for r in (self._board_in.get("top") or [])[:3]]
@@ -719,6 +740,133 @@ class Schedule1Customers(BasePlugin):
             return {"success": True, "reply": f"@{who} you're on the customer list (#{place}). "
                                               f"Your name shows up on a customer in the game soon."}
         return {"success": True, "reply": f"@{who} you're #{place} on the waiting list for a customer."}
+
+    # ------------------------------------------------------------------ chat names the new mix
+
+    def _prefix(self) -> str:
+        """Core's chat command prefix ("!" unless changed under core.command_prefix)."""
+        return str(((self.config or {}).get("core") or {}).get("command_prefix") or "!")
+
+    async def _announce(self, text: str) -> None:
+        """Say ``text`` in every chat Core is set to read (twitch / kick / youtube with enabled on)."""
+        cfg = self.config or {}
+        for p in Platform:
+            if (cfg.get(p.value) or {}).get("enabled"):
+                await self.ctx.reply(p, text)
+
+    async def _mix_start(self, ev: dict) -> None:
+        """Event "mix_vote": the streamer pressed "Let chat name it" on the naming screen (MixNamer.cs).
+        The event carries ``game_names`` (the game's own pick first), ``taken`` (product names already
+        in the save), ``effects`` and ``value`` ("$123"). Starts a MixVote, or tells the mod why not."""
+        s = self._s()
+        if not s.get("mix_vote_enabled", True):
+            await self.bridge.mixvote({"state": "off", "msg": "Chat naming is off in Stream Core "
+                                                              "(Games > Schedule I > Settings)"})
+            return
+        now = time.time()
+        if self.mix is not None and self.mix.phase in ("suggest", "vote"):
+            self.mix.stop()                   # a new screen while one runs: the old one is over
+        self.mix = MixVote(
+            game_names=[str(n) for n in ev.get("game_names") or []],
+            taken=[str(n) for n in ev.get("taken") or []],
+            effects=[str(e) for e in ev.get("effects") or []],
+            value=str(ev.get("value") or ""),
+            now=now,
+            suggest_sec=self._num("mix_suggest_sec", 30, 0),
+            vote_sec=self._num("mix_vote_sec", 30, 5),
+            options=int(self._num("mix_options", 4, 2)),
+            keep_game_name=bool(s.get("mix_keep_game_name", True)),
+        )
+        self._mix_sent = None
+        effects = ", ".join(self.mix.effects[:5])
+        what = f"The streamer made a new mix{f' ({effects})' if effects else ''}"
+        if self.mix.phase == "suggest":
+            await self._announce(f"🧪 {what}. Chat names it! Suggest a name with {self._prefix()}mixname <name> "
+                                 f"in the next {round(self.mix.ends_at - now)} s.")
+        else:
+            await self._mix_announce_vote(what + ". Chat names it!")
+        await self._mix_tick(force=True)
+
+    async def _mix_announce_vote(self, lead: str = "") -> None:
+        """Chat line listing the options and how to vote."""
+        m = self.mix
+        if m is None or m.phase != "vote":
+            return
+        opts = " · ".join(f"{self._prefix()}{i + 1} {o}" for i, o in enumerate(m.options))
+        await self._announce(f"🧪 {lead + ' ' if lead else ''}Vote for the mix's name "
+                             f"({round(m.ends_at - time.time())} s): {opts}")
+
+    async def _mix_stop(self, ev: dict) -> None:
+        """Event "mix_vote_stop": the streamer pressed the button again ("button") or the naming screen
+        closed ("closed": named by hand, or left with Esc) before chat finished."""
+        m = self.mix
+        if m is None or m.phase not in ("suggest", "vote"):
+            return
+        m.stop()
+        await self._announce("🧪 The streamer stopped the mix name vote." if ev.get("reason") == "button"
+                             else "🧪 Mix name vote over: the streamer closed the naming screen.")
+        await self._mix_tick(force=True)
+
+    async def _mix_suggest(self, req: ExecuteRequest) -> dict:
+        """!mixname <idea>: one idea per chatter while ideas are open. Hidden / red-flagged chatters
+        are ignored without a word (their idea could end up in the save and on stream)."""
+        u = req.user
+        plat = req.platform.value if hasattr(req.platform, "value") else str(req.platform)
+        who = clean_name(u.display_name, u.username)
+        if self.mix is None or self.mix.phase not in ("suggest", "vote"):
+            return {"success": True, "reply": f"@{who} there's no new mix to name right now."}
+        if self.is_hidden(plat, u.id, u.username, u.display_name):
+            return {"success": True}
+        if not req.args:
+            return {"success": True, "reply": f"@{who} {self._prefix()}mixname <name>, e.g. {self._prefix()}mixname Blue Dream"}
+        s = self._s()
+        ok, text = self.mix.suggest(person_key(plat, u.id, u.username), " ".join(req.args),
+                                    max_len=int(self._num("mix_max_len", 24, 3)), blocked=s.get("mix_blocked_words"))
+        if not ok:
+            return {"success": True, "reply": f"@{who} {text}."}
+        return {"success": True}              # the board / in-game list shows it; no chat spam per idea
+
+    def _mix_chat_vote(self, event) -> None:
+        """A chat line that is a vote: "!2" or "!vote 2" (Core's prefix). Changing your vote is fine."""
+        text = str(getattr(event, "message", "") or "").strip()
+        p = re.escape(self._prefix())
+        m = re.fullmatch(p + r"(?:vote\s+)?(\d)", text, flags=re.IGNORECASE)
+        u = getattr(event, "user", None)
+        if not m or u is None:
+            return
+        plat = u.platform.value if hasattr(u.platform, "value") else str(u.platform)
+        self.mix.vote(person_key(plat, u.id, u.username), int(m.group(1)) - 1)
+
+    async def _mix_tick(self, force: bool = False) -> None:
+        """Every loop pass (tick): move the vote on when its time is up, then send its state to the
+        mod (POST /mixvote, only when it changed or ``force``) and the board to the overlays."""
+        m = self.mix
+        now = time.time()
+        if m is None:
+            if self._mix_clear_at and now >= self._mix_clear_at:
+                self._mix_clear_at = 0.0
+                if self.ctx.broadcast is not None:
+                    await self.ctx.broadcast({"type": "board_clear", "data": {"id": MIX_BOARD_ID}})
+            return
+        moved = m.tick(now)
+        if moved == "vote":
+            await self._mix_announce_vote()
+        elif moved == "done":
+            if m.winner:
+                n = m.winner_votes()
+                await self._announce(f"🧪 Chat named the new mix: {m.winner}"
+                                     + (f" ({n} vote{'s' if n != 1 else ''})!" if n else "!"))
+            else:
+                await self._announce("🧪 No name ideas and nothing to vote on: the streamer picks the name.")
+        state = m.mod_state(now, confirm=bool(self._s().get("mix_auto_confirm", True)))
+        if force or moved or state != self._mix_sent:
+            if self.ctx.broadcast is not None:
+                await self.ctx.broadcast({"type": "board", "data": {**m.board(self._prefix()), "ts": now}})
+            await self.bridge.mixvote(state)  # BridgeError: tick() catches it, the next pass sends again
+            self._mix_sent = state
+        if m.phase in ("done", "stopped"):
+            self.mix = None                   # finished: the board stays a few seconds, then goes
+            self._mix_clear_at = now + MIX_BOARD_HOLD_SEC
 
     # ------------------------------------------------------------------ dashboard
 
