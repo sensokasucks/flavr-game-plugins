@@ -11,8 +11,9 @@ Home: `fridge-factorio-stats/` (Lua `mod/`, Node `server/`, `overlay/`). Core si
 - [ ] Core POSTs metrics (`power_level` 0–15) to bridge `POST /api/metrics`.
 - [ ] Chat Dynamo entity `fridge-chat-dynamo` scales 0 → startup max MW (default 6 MW at level 15). RCON `/fridge-power <0-15>`. Craft or `/fridge-give-dynamo`.
 - [ ] Power numbers prefer Wiretap (`hmph-wiretap`). Overlay still works without it (approximate power).
-- [ ] Power Vault + Item Vault flush to Core `POST /api/market/dividend`. Thresholds `vault_flush_mj` / `chest_flush_items` hot-saved from Admin → Market.
+- [ ] Power Vault + Item Vault flush to Core `POST /api/market/dividend`. Gamer Stonks answers that address, so it must be installed and on. Thresholds `vault_flush_mj` / `chest_flush_items` hot-saved from the Factorio tab on the Gamer Stonks page.
 - [ ] Dynamo / vault / chest tickers live in `factorio.market.*`. Defaults: symbol `FACTORIO` only.
+- [ ] Dynamo factor and power drain read the Gamer Stonks tape through `ctx.service("market")`; `plugin.json` has `"core_api": 2` and `"after": ["market"]`. Tests: `tests/test_market_wiring.py`.
 - [ ] Command group `factorio` binds to the integration running (stats/overlay; factory chat commands are not required).
 - [ ] Admin → Status + Integrations show Factorio with overlay URLs.
 - [ ] Rebrand: `/xsplit-stats` may stay as an alias; new installs use `fridge-factorio-stats`.

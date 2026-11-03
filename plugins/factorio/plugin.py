@@ -11,6 +11,11 @@ Enable with factorio.enabled=true and keep the Node bridge running (fridge-facto
 
 Settings live under ``factorio:`` in Core's config.yaml; defaults and the Gamer Stonks
 fields are in plugin.json (keep the ``market.*`` keys read below in sync with it).
+
+The dynamo price factor and the power drain need the Gamer Stonks plugin (plugins/stonks)
+running: the tape comes from ctx.service("market"), and plugin.json says
+"after": ["market"] so Gamer Stonks starts first. Vault payouts don't go through this
+file at all: the bridge posts them to /api/market/dividend, which Gamer Stonks answers.
 Loaded by Core's plugin manager from plugin.json ("entry": "plugin:FactorioIntegration").
 """
 
@@ -53,7 +58,7 @@ class FactorioIntegration(BasePlugin):
         self._client: Optional[httpx.AsyncClient] = None
         self.last_stats: dict = {}
         self.core_url = str((config.get("core") or {}).get("public_url") or "http://127.0.0.1:3850").rstrip("/")
-        self._market = None
+        self._attached_market = None   # set by attach_market (tests); live Core leaves it None
 
     def overlay_catalog(self) -> list[dict]:
         """Overlay URLs for Admin -> Integrations / Sources (bridge pages + Core's market tape)."""
@@ -95,12 +100,21 @@ class FactorioIntegration(BasePlugin):
         }
 
     def attach_market(self, tape) -> None:
-        """Give the plugin the Gamer Stonks tape (MarketTape). The tests call this.
+        """Pin a Gamer Stonks tape (MarketTape) by hand. Only the unit tests call this;
+        a live Core never does, ``_market`` finds the tape through ctx.service instead."""
+        self._attached_market = tape
 
-        Note: current Stream Core does not call attach_market (the market is now
-        ctx.service("market")), so in a live Core ``_market`` stays None.
+    @property
+    def _market(self):
+        """The Gamer Stonks tape (plugins/stonks/tape.py MarketTape), or None.
+
+        Looked up on every use rather than once in start(), so it keeps working when
+        Gamer Stonks is switched on or restarted after Factorio. ctx.service("market")
+        asks Core's plugin manager for whichever running plugin "provides" market.
         """
-        self._market = tape
+        if self._attached_market is not None:
+            return self._attached_market
+        return self.ctx.service("market") if self.ctx is not None else None
 
     def _market_cfg(self) -> dict:
         """A copy of ``factorio.market`` from the live config."""
