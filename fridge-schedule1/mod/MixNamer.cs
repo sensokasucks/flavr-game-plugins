@@ -17,8 +17,8 @@
 //
 // Callers: Core.OnUpdate calls Tick() every frame. Everything here runs on the main thread (Unity UI).
 // State names ("off", "suggest", "vote", "done", "stopped") must match plugins/schedule1/mixvote.py.
-// The game's own names for the screen's parts (nameInputField, confirmButton, MarketValueLabel,
-// name1Library ...) come from its NewMixScreen class; a game update that renames them makes Tick
+// The game's own names for the screen's parts (nameInputField, confirmButton, marketValueLabel,
+// propertiesLabels, name1Library ...) come from its NewMixScreen class; a game update that renames them makes Tick
 // log one warning and leaves the screen as the game made it.
 
 using System;
@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using MelonLoader;
 using S1API.UI;
+using S1API.Utils;   // ButtonUtils.AddListener (same helper ChatApp.cs uses)
 using UnityEngine;
 using UnityEngine.UI;
 using S1Screen = Il2CppScheduleOne.UI.NewMixScreen;
@@ -144,8 +145,8 @@ namespace FridgeSchedule1
             {
                 ["game_names"] = GameNames(screen),
                 ["taken"] = TakenNames(),
-                ["effects"] = Lines(screen.PropertiesLabel.text),
-                ["value"] = Strip(screen.MarketValueLabel.text).Replace("Market Value:", "").Trim(),
+                ["effects"] = Lines(EffectsText(screen)),
+                ["value"] = Strip(screen.marketValueLabel.text).Replace("Market Value:", "").Trim(),
                 ["current"] = _gamePick,
             });
             _mode = "asking";
@@ -307,7 +308,7 @@ namespace FridgeSchedule1
             rt.anchoredPosition = crt.anchoredPosition + new Vector2(0f, -(h + 14f));
             _buttonLabel = _button.GetComponentInChildren<TMPText>(true);
 
-            var statusGo = UnityEngine.Object.Instantiate(screen.MarketValueLabel.gameObject, parent);
+            var statusGo = UnityEngine.Object.Instantiate(screen.marketValueLabel.gameObject, parent);
             statusGo.name = "FridgeChatNameStatus";
             _status = statusGo.GetComponent<TMPText>();
             _status.richText = true;
@@ -321,6 +322,24 @@ namespace FridgeSchedule1
             _builtFor = screen;
             _shownLabel = _shownStatus = null;
             _log.Msg("'Let chat name it' button added to the new mix screen");
+        }
+
+        // All effect lines on the screen as one newline-joined rich text, for Lines() below. The game
+        // keeps one label per effect in propertiesLabels (up to NewMixScreen.MaxDisplayedProperties)
+        // and hides the unused ones, so only the active labels count. Called from OnButton.
+        private static string EffectsText(S1Screen screen)
+        {
+            var labels = screen.propertiesLabels;
+            if (labels == null)
+                return "";
+            var parts = new List<string>();
+            for (int i = 0; i < labels.Length; i++)
+            {
+                var l = labels[i];
+                if (l != null && l.gameObject.activeSelf && !string.IsNullOrEmpty(l.text))
+                    parts.Add(l.text);
+            }
+            return string.Join("\n", parts);
         }
 
         // The game's coloured "• Effect" lines as plain effect names.
