@@ -98,6 +98,7 @@ namespace FridgeSchedule1
         private static MapPOI _marker;
         private static S1NPC _findNpc;
         private static float _findUntil;
+        private static Vector3 _lastMarkerAt;    // where the marker was last put (TickFind)
         /// <summary>"zackfan99 (Kyle Cooley)" while a marker is out, else null (ChatApp's Finding bar).</summary>
         public static string FindingLabel { get; private set; }
         /// <summary>Goes up whenever a marker starts or stops, so ChatApp redraws its Finding bar.</summary>
@@ -118,11 +119,13 @@ namespace FridgeSchedule1
                     .WithTextVisibility(MapPOITextVisibility.Always)
                     .Build();
                 _findNpc = npc;
+                _lastMarkerAt = npc.transform.position;
                 _findUntil = Time.realtimeSinceStartup + Mathf.Max(1f, FindMinutes) * 60f;
                 FindingLabel = label;
                 FindVersion++;
-                if (_marker.IsUIReady)
-                    _marker.Focus();
+                // No _marker.Focus() here: calling it from our app put the game's Map app into a
+                // half-open state, and after that it wouldn't open from its icon any more (Sen,
+                // 2026-11-03). The player opens the Map app the normal way; the marker is waiting there.
                 return true;
             }
             catch (Exception ex)
@@ -161,11 +164,16 @@ namespace FridgeSchedule1
                     StopFinding("time's up");
                 else if (me != null && Vector3.Distance(me.transform.position, _findNpc.transform.position) <= ArriveMetres)
                     StopFinding("found");
-                else
-                    _marker.SetPosition(_findNpc.transform.position);
+                else if (Vector3.Distance(_lastMarkerAt, _findNpc.transform.position) > 1f)
+                {
+                    // only move the marker when the customer moved (less work for the map UI)
+                    _lastMarkerAt = _findNpc.transform.position;
+                    _marker.SetPosition(_lastMarkerAt);
+                }
             }
-            catch
+            catch (Exception ex)
             {
+                MelonLogger.Warning("[FridgeSchedule1] Find marker update failed, marker removed: " + ex.Message);
                 StopFinding(null);
             }
         }

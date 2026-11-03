@@ -271,7 +271,7 @@ namespace FridgeSchedule1
         {
             var row = UIFactory.Panel("Finding", _list, new Color(0.15f, 0.3f, 0.2f));
             row.AddComponent<LayoutElement>().minHeight = _rowH * 0.7f;
-            Label(row, $"Finding {CustomerStatus.FindingLabel}: it's on your map", Font(), 0f, 0.78f);
+            Label(row, $"Finding {CustomerStatus.FindingLabel}: open the Map app to see them", Font(), 0f, 0.78f);
             var (go, btn, _) = UIFactory.ButtonWithLabel("Stop", "Stop", row.transform, RemoveColor, 0, 0);
             Place(go, 0.8f, 0.15f, 0.99f, 0.85f);
             ButtonUtils.AddListener(btn, () => { CustomerStatus.StopFinding("stopped"); _dirty = true; });
@@ -299,7 +299,7 @@ namespace FridgeSchedule1
             ButtonUtils.AddListener(fbtn, () =>
             {
                 Shared.AddFeed(CustomerStatus.Mark(CustomerWatcher.Instance?.Find(r.npc).npc, $"{r.name} ({r.customer})")
-                    ? $"{r.name} ({r.customer}) is marked on your map" : $"can't find {r.customer} right now");
+                    ? $"{r.name} ({r.customer}) is marked: open the Map app to see them" : $"can't find {r.customer} right now");
                 _dirty = true;
             });
             if (guest)

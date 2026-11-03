@@ -154,7 +154,7 @@ namespace FridgeSchedule1
                 // this player's own map, host or guest
                 var npc = _watcher.Find(r.npc).npc;
                 Shared.AddFeed(CustomerStatus.Mark(npc, string.IsNullOrEmpty(r.by) ? npc?.FullName ?? r.npc : r.by)
-                    ? $"{r.by} is marked on your map" : $"couldn't find {r.by} in this save");
+                    ? $"{r.by} is marked: open the Map app to see them" : $"couldn't find {r.by} in this save");
                 return;
             }
             if (r.type == "nudge")
