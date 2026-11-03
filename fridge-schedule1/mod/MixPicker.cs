@@ -1,7 +1,8 @@
 // "Let chat pick": a button on Schedule I's mixing station screen that lets chat vote on the next
 // ingredient to mix in.
 //
-// The game's mixing station screen (MixingStationCanvas) has a product slot, an ingredient slot and a
+// The game's mixing station screen (MixingStationInterface, a Singleton like the other station
+// screens; older game builds called it MixingStationCanvas) has a product slot, an ingredient slot and a
 // Begin button. This file adds our button next to Begin and a short status text under it.
 //
 // Flow (each player's own screen and own Stream Core, host or co-op guest alike):
@@ -16,7 +17,7 @@
 //
 // Callers: Core.OnUpdate calls Tick() every frame. Main thread only (Unity UI). State names ("off",
 // "vote", "done", "stopped") must match mixpick.py. The game's names for the screen's parts
-// (BeginButton, InstructionLabel, MixingStation.ProductSlot) come from its MixingStationCanvas class;
+// (IsOpen, BeginButton, InstructionLabel, Station.ProductSlot) come from its MixingStationInterface class;
 // a game update that renames them makes Tick log one warning and leaves the screen as the game made it.
 
 using System;
@@ -25,7 +26,7 @@ using MelonLoader;
 using S1API.UI;
 using UnityEngine;
 using UnityEngine.UI;
-using S1Canvas = Il2CppScheduleOne.UI.Stations.MixingStationCanvas;
+using S1Canvas = Il2CppScheduleOne.UI.Stations.MixingStationInterface;
 using S1Products = Il2CppScheduleOne.Product.ProductManager;
 using S1Inventory = Il2CppScheduleOne.PlayerScripts.PlayerInventory;
 using TMPText = Il2CppTMPro.TextMeshProUGUI;
@@ -65,7 +66,7 @@ namespace FridgeSchedule1
             try
             {
                 canvas = Il2CppScheduleOne.DevUtilities.Singleton<S1Canvas>.Instance;
-                open = canvas != null && canvas.isOpen;
+                open = canvas != null && canvas.IsOpen;
             }
             catch
             {
@@ -109,7 +110,7 @@ namespace FridgeSchedule1
         private void OnButton()
         {
             var canvas = Il2CppScheduleOne.DevUtilities.Singleton<S1Canvas>.Instance;
-            if (canvas == null || !canvas.isOpen)
+            if (canvas == null || !canvas.IsOpen)
                 return;
             if (_mode != "idle")
             {
@@ -164,7 +165,7 @@ namespace FridgeSchedule1
         {
             try
             {
-                var item = canvas.MixingStation?.ProductSlot?.ItemInstance;
+                var item = canvas.Station?.ProductSlot?.ItemInstance;
                 return item?.Definition != null ? item.Definition.Name ?? "" : "";
             }
             catch
