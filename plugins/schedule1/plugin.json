@@ -1,0 +1,91 @@
+{
+  "id": "schedule1",
+  "name": "Schedule I",
+  "version": "0.7.0",
+  "core_api": 2,
+  "kind": "python",
+  "entry": "plugin:Schedule1Customers",
+  "description": "Chatters become customers in Schedule I: !customer puts their name on a customer in your game, and chat hears when they order or buy. Needs the FridgeSchedule1 MelonLoader mod (or its mock server on port 3857).",
+  "links": [
+    {
+      "name": "FridgeSchedule1 mod",
+      "url": "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1"
+    }
+  ],
+  "config_defaults": {
+    "bridge_url": "http://127.0.0.1:3857",
+    "bridge_token": "",
+    "poll_sec": 2,
+    "sync_sec": 10,
+    "auto_join": "off",
+    "prefer_unlocked": true,
+    "max_named": 0,
+    "name_style": "chatter",
+    "max_name_len": 24,
+    "announce_new": true,
+    "announce_orders": true,
+    "announce_deals": true,
+    "nudge_new": true,
+    "regulars_only": false,
+    "rotate_after_deals": 0,
+    "rotate_after_min": 0,
+    "rotate_keep_subs": false,
+    "mug_enabled": false,
+    "mug_cost": 500,
+    "mug_cooldown_sec": 300,
+    "mug_goons": 2,
+    "alerts_in_game": false,
+    "alert_kinds": []
+  },
+  "command_group": {
+    "description": "Schedule I customers (!customer, !topcustomers)"
+  },
+  "pages": [
+    {
+      "id": "main",
+      "title": "Schedule I customers",
+      "file": "pages/index.html",
+      "nav": "Games",
+      "keywords": "schedule one schedule i customers chatters names npc"
+    }
+  ],
+  "settings": [
+    {"key": "bridge_url", "label": "Mod URL", "type": "url", "placeholder": "http://127.0.0.1:3857",
+     "help": "Where the FridgeSchedule1 mod (or START Schedule1 Mock.bat) listens"},
+    {"key": "bridge_token", "label": "Mod token", "type": "password",
+     "help": "Optional. Same text as Token in the mod's MelonPreferences.cfg"},
+    {"key": "auto_join", "page": true, "group": "Joining", "label": "Join without !customer", "type": "select", "options": ["off", "subs", "everyone"],
+     "help": "subs = subscribers / members join when they chat; everyone = every chatter"},
+    {"key": "prefer_unlocked", "page": true, "group": "Joining", "label": "Name customers you've already met first", "type": "checkbox"},
+    {"key": "nudge_new", "page": true, "group": "Joining", "label": "Newly named customers text you an order soon", "type": "checkbox",
+     "help": "When a chatter's name lands on a customer you've already met, that customer texts you an order a few seconds later (unless they already have a deal, an open order or a dealer). In co-op only the host's setting counts."},
+    {"key": "regulars_only", "page": true, "group": "Joining", "label": "Only put chatter names on the extra regulars", "type": "checkbox",
+     "help": "Only the ten Regulars (FridgeRegulars.dll) carry chatter names; everyone else waits for one. Chatters on normal customers move to a free Regular or back to waiting. Pair it with Shifts so names take turns."},
+    {"key": "max_named", "page": true, "group": "Joining", "label": "Most named customers at once", "type": "number", "min": 0, "step": 1,
+     "help": "0 = every customer can carry a chatter name"},
+    {"key": "rotate_after_deals", "page": true, "group": "Shifts", "label": "Shift ends after this many deals", "type": "number", "min": 0, "step": 1,
+     "help": "0 = off. When someone is waiting, a chatter whose customer made this many deals goes to the back of the line and the next chatter takes over. Their totals are kept."},
+    {"key": "rotate_after_min", "page": true, "group": "Shifts", "label": "Shift ends after (minutes)", "type": "number", "min": 0, "step": 1,
+     "help": "0 = off. Same as above, by time on the customer (for customers who rarely order)."},
+    {"key": "rotate_keep_subs", "page": true, "group": "Shifts", "label": "Subscribers / members keep their customer", "type": "checkbox",
+     "help": "Shifts never end for subs. Updated when they type !customer or join on their own."},
+    {"key": "name_style", "page": true, "group": "Names", "label": "Name in the game", "type": "select", "options": ["chatter", "chatter_last"],
+     "help": "chatter = 'zackfan99'; chatter_last = 'zackfan99 Cooley'"},
+    {"key": "max_name_len", "page": true, "group": "Names", "label": "Longest name (characters)", "type": "number", "min": 3, "max": 40, "step": 1},
+    {"key": "announce_new", "page": true, "group": "Chat lines", "label": "Say in chat when someone becomes a customer", "type": "checkbox"},
+    {"key": "announce_orders", "page": true, "group": "Chat lines", "label": "Say in chat when a chatter-customer orders", "type": "checkbox"},
+    {"key": "announce_deals", "page": true, "group": "Chat lines", "label": "Say in chat when a chatter-customer's deal goes through", "type": "checkbox"},
+    {"key": "alerts_in_game", "page": true, "group": "Alerts on the phone", "label": "Show stream alerts on the in-game phone", "type": "checkbox",
+     "help": "Follows, subs, raids, tips ... pop up on your phone in Schedule I and go into the Chat app's feed. The Alerts page's test buttons work too."},
+    {"key": "alert_kinds", "page": true, "group": "Alerts on the phone", "label": "Which alerts", "type": "list",
+     "help": "Empty = all of them. Or pick kinds: follow, subscribe, resub, gift, raid, host, bits, superchat, donation, member, ..."},
+    {"key": "mug_enabled", "page": true, "group": "Mugging", "label": "Chat can mug you (!mug)", "type": "checkbox",
+     "help": "A chatter pays points and cartel goons come out of the nearest building after you. In co-op it hits your own player."},
+    {"key": "mug_cost", "page": true, "group": "Mugging", "label": "Price (points)", "type": "number", "min": 0, "step": 50,
+     "help": "Refunded when the game can't do it (no save loaded, you're knocked out, no goons free)."},
+    {"key": "mug_cooldown_sec", "page": true, "group": "Mugging", "label": "Cooldown for the whole chat (s)", "type": "number", "min": 0, "step": 30},
+    {"key": "mug_goons", "page": true, "group": "Mugging", "label": "Goons per mugging", "type": "number", "min": 1, "max": 4, "step": 1},
+    {"key": "sync_sec", "page": true, "group": "Timing", "label": "Check the game's customers every (s)", "type": "number", "min": 2, "step": 1},
+    {"key": "poll_sec", "page": true, "group": "Timing", "label": "Check for orders / deals every (s)", "type": "number", "min": 0.5, "step": 0.5}
+  ]
+}

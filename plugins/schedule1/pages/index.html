@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!-- Schedule I customers page, shown in a frame inside the Stream Core dashboard (Games menu).
+     Script: customers.js. Data: ../routes.py. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Schedule I customers</title>
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <link rel="stylesheet" href="customers.css" />
+  <script src="/admin/plugin-page.js"></script>
+</head>
+<body>
+<main>
+  <p class="tab-intro">
+    Chatters who type <code>!customer</code> get their name on a customer in your Schedule I game.
+    Chat hears when they text an order and when the deal goes through. Hidden and red-flagged chatters never get a name.
+    <code>!customer leave</code> takes someone off; you can do it here too.
+  </p>
+  <div class="toolbar">
+    <button id="refresh" class="primary" type="button">Refresh</button>
+    <span id="status" class="muted" role="status"></span>
+  </div>
+
+  <div class="subtabs" id="tabs" role="tablist">
+    <button type="button" class="subtab active" data-sub="customers">Customers</button>
+    <button type="button" class="subtab" data-sub="settings">Settings</button>
+  </div>
+
+  <!-- Settings tab: the plugin.json fields marked "page": true, grouped by "group" (customers.js
+       renderSettings). The mod address and token stay on Settings → Plugins with Enabled. -->
+  <section class="sub" data-sub="settings" hidden>
+    <p class="hint">These apply straight away, no restart. The mod address and token are on
+      Settings → Plugins, next to Enabled.</p>
+    <div id="settings" class="mc-grid"></div>
+    <div class="form-row" style="gap:8px;flex-wrap:wrap">
+      <button type="button" class="primary" id="save-settings">Save settings</button>
+      <span class="muted" id="settings-status"></span>
+    </div>
+  </section>
+
+  <section class="sub" data-sub="customers">
+  <fieldset class="cfg-card">
+    <legend>Customers</legend>
+    <p class="hint" id="summary"></p>
+    <div class="table-wrap">
+      <table id="people">
+        <thead>
+          <tr><th>Chatter</th><th>Platform</th><th>Customer in game</th><th>When they turn up</th><th>Deals</th><th>Spent</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </fieldset>
+
+  <fieldset class="cfg-card">
+    <legend>Add someone by hand</legend>
+    <form id="add" class="inline-form">
+      <label>Platform
+        <select id="add-platform"><option>twitch</option><option>youtube</option><option>kick</option></select>
+      </label>
+      <label>Name <input id="add-name" type="text" maxlength="40" required /></label>
+      <button type="submit">Add</button>
+    </form>
+  </fieldset>
+  </section>
+</main>
+<script src="customers.js"></script>
+</body>
+</html>

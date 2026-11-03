@@ -1,0 +1,32 @@
+{
+  "customer": {
+    "aliases": ["regular"],
+    "permission": "public",
+    "description": "Put your name on a customer in the streamer's Schedule I game (!customer leave to stop)",
+    "args": ["leave"],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!customer", "!customer leave"]
+  },
+  "mug": {
+    "aliases": ["rob"],
+    "permission": "public",
+    "description": "Pay points to send cartel goons after the streamer in Schedule I (price and cooldown on the Schedule I page)",
+    "args": [],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!mug"]
+  },
+  "topcustomers": {
+    "aliases": ["bestcustomers"],
+    "permission": "public",
+    "description": "The three chatter-customers who spent the most in Schedule I",
+    "args": [],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!topcustomers"]
+  }
+}
