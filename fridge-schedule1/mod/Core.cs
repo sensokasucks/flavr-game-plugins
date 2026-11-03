@@ -29,7 +29,7 @@
 using System;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.8.2", "sensokasucks",
+[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.8.3", "sensokasucks",
     "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 

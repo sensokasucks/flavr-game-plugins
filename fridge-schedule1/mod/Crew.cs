@@ -269,13 +269,35 @@ namespace FridgeSchedule1
                     return;
                 }
                 _applied[id] = want;
+                RefreshLabels(npc);
                 _log.Msg($"crew: {own.first} {own.last} -> {$"{want.first} {want.last}".Trim()}");
             }
             else if (have != null)
             {
                 NpcNames.Set(npc, own.first, own.last);
                 _applied.Remove(id);
+                RefreshLabels(npc);
                 _log.Msg($"crew: {own.first} {own.last} has their own name back");
+            }
+        }
+
+        // A worker's name also shows on their bed / locker (EmployeeHome.NameLabel), drawn when the bed is
+        // assigned; assigning the same worker again redraws it with the new name. Dealers have no bed.
+        private void RefreshLabels(S1NPC npc)
+        {
+            var emp = npc?.TryCast<S1Employee>();
+            if (emp == null)
+                return;
+            try
+            {
+                var homes = UnityEngine.Object.FindObjectsOfType<Il2CppScheduleOne.Employees.EmployeeHome>();
+                for (int i = 0; homes != null && i < homes.Length; i++)
+                    if (homes[i] != null && homes[i].AssignedEmployee != null && homes[i].AssignedEmployee.ID == emp.ID)
+                        homes[i].SetAssignedEmployee(emp);
+            }
+            catch (Exception ex)
+            {
+                _log.Warning("worker's bed label not redrawn: " + ex.Message);
             }
         }
 
