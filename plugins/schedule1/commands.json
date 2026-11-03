@@ -29,6 +29,76 @@
     "cost": 0,
     "examples": ["!topcustomers"]
   },
+  "staff": {
+    "aliases": ["worker"],
+    "permission": "public",
+    "description": "Put your name on one of the streamer's Schedule I workers (!staff leave to stop)",
+    "args": ["leave"],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!staff", "!staff leave"]
+  },
+  "topstaff": {
+    "aliases": [],
+    "permission": "public",
+    "description": "The chatter-workers who got the most done in Schedule I",
+    "args": [],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!topstaff"]
+  },
+  "drop": {
+    "aliases": ["cashdrop"],
+    "permission": "public",
+    "description": "Pay points to leave the streamer cash in a Schedule I dead drop, with a note (!drop good luck)",
+    "args": ["note"],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!drop", "!drop buy more seeds"]
+  },
+  "tab": {
+    "aliases": [],
+    "permission": "public",
+    "description": "Pay points toward what the streamer owes a Schedule I supplier (!tab albert 500)",
+    "args": ["supplier", "points"],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!tab", "!tab albert 500"]
+  },
+  "supply": {
+    "aliases": [],
+    "permission": "public",
+    "description": "Pay points so a Schedule I supplier leaves the streamer goods at a dead drop (!supply albert)",
+    "args": ["supplier"],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!supply", "!supply shirley"]
+  },
+  "sponsor": {
+    "aliases": [],
+    "permission": "public",
+    "description": "Back one of the streamer's Schedule I dealers with points and earn from its sales (!sponsor benji 1000)",
+    "args": ["dealer", "points"],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!sponsor", "!sponsor benji 1000", "!sponsor leave"]
+  },
+  "topdealers": {
+    "aliases": [],
+    "permission": "public",
+    "description": "The dealer sponsors whose dealers sold the most in Schedule I",
+    "args": [],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!topdealers"]
+  },
   "mixname": {
     "aliases": ["namemix"],
     "permission": "public",

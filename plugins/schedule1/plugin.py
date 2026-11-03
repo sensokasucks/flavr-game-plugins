@@ -7,8 +7,8 @@ goes through, Core says so in chat. Talks to the FridgeSchedule1 MelonLoader mod
 server) through bridge.py; who has which customer lives in roster.py's table.
 
 Settings live under ``schedule1:`` in config.yaml (defaults in plugin.json). Chat commands are in
-commands.json. Stats overlay / points commands / paid events are later steps
-(/mnt/project-files/schedule1/SCHEDULE1_PLUGIN_DESIGN.md in the project, not built yet).
+commands.json. A stats overlay is a later step (/mnt/project-files/schedule1/SCHEDULE1_PLUGIN_DESIGN.md
+in the project, not built yet).
 
 The background loop (_loop) runs every ``poll_sec`` seconds while the plugin is on:
   - every ``sync_sec`` (or straight away after a join / leave / unlock): read the game's customers,
@@ -21,6 +21,11 @@ Stream alerts (follows, subs, raids, ...) reach _on_alert from Core's event bus;
 New mixes: the mod's "Let chat name it" button on the game's naming screen sends a "mix_vote" event;
 _mix_start runs a MixVote (mixvote.py: !mixname ideas, then !1 !2 ... votes), _mix_tick moves it on
 and sends its state to the mod (POST /mixvote) and the overlays (a "board" packet like Core's polls).
+
+More features, each in its own file with the same hooks (feature.py explains them): staff.py (workers
+carry chatter names, !staff), drops.py (donations and !drop become cash in a dead drop), mixpick.py
+(chat votes the next mixing ingredient), suppliers.py (!tab / !supply) and dealers.py (!sponsor). They
+live in ``self.features``; start / tick / handle_event / execute / chat / alerts below pass everything to them.
 """
 
 from __future__ import annotations
@@ -37,8 +42,14 @@ from core.plugin_api import BasePlugin
 
 from .alert_style import style_for
 from .bridge import Bridge, BridgeError
+from .dealers import Dealers
+from .drops import Drops
+from .feature import CrewSync
+from .mixpick import MixPick
 from .mixvote import BOARD_ID as MIX_BOARD_ID, MixVote
 from .roster import Roster, clean_name, desired_names, person_key, plan_assignments, plan_rotation
+from .staff import Staff
+from .suppliers import Suppliers
 
 log = logging.getLogger("plugins.schedule1")
 
@@ -112,6 +123,17 @@ class Schedule1Customers(BasePlugin):
         self.mix: Optional[MixVote] = None
         self._mix_clear_at = 0.0
         self._mix_sent: Optional[dict] = None
+        # The mod's GET /crew (workers, dealers, suppliers), kept fresh by feature.CrewSync; crew_wake = read
+        # it again on the next pass (a supplier's debt changed).
+        self.crew: dict = {"loaded": False, "staff": [], "dealers": [], "suppliers": []}
+        self.crew_wake = False
+        # The extra features (feature.py). CrewSync first, so the others see this pass's crew list.
+        self.staff = Staff(self)
+        self.drops = Drops(self)
+        self.mixpick = MixPick(self)
+        self.suppliers = Suppliers(self)
+        self.dealers = Dealers(self)
+        self.features = [CrewSync(self), self.staff, self.drops, self.mixpick, self.suppliers, self.dealers]
         self.connected = False
         self.last_error = ""
 
@@ -135,12 +157,16 @@ class Schedule1Customers(BasePlugin):
         self.enabled = bool(s.get("enabled"))
         self.roster = Roster(self.ctx.db)
         await self.roster.setup()
+        for f in self.features:
+            await f.setup()
         self.bridge = Bridge(s.get("bridge_url") or "http://127.0.0.1:3857", str(s.get("bridge_token") or ""))
         bus = getattr(self.ctx, "bus", None)
         if bus is not None:
             bus.on_chat(self._on_chat)       # the event bus has no "off": handlers check _running
             bus.on_flag(self._on_flag_event)
             bus.on_alert(self._on_alert)
+            bus.on_chat(self._features_chat)
+            bus.on_alert(self._features_alert)
         self._running = True
         self._task = asyncio.create_task(self._loop(), name="schedule1-customers")
         log.info("Schedule I customers started (mod at %s)", self.bridge.base_url)
@@ -185,6 +211,8 @@ class Schedule1Customers(BasePlugin):
             await self.poll_events()
             await self._expire_mugs()
             await self._mix_tick()
+            for f in self.features:
+                await f.tick()
             self.connected, self.last_error = True, ""
         except BridgeError as exc:
             if self.connected or not self.last_error:
@@ -404,6 +432,9 @@ class Schedule1Customers(BasePlugin):
     async def handle_event(self, ev: dict) -> None:
         """One game event: "contract" (a customer texted an order), "deal" (it went through), "unlocked",
         or a phone app button: "app_remove" / "app_swap" with the chatter's ``key`` (mod ChatApp.cs)."""
+        for f in self.features:              # staff jobs, drops, ingredient vote, suppliers, dealers
+            if await f.handle_event(ev):
+                return
         kind = str(ev.get("type") or "")
         npc = str(ev.get("id") or "")
         s = self._s()
@@ -654,6 +685,27 @@ class Schedule1Customers(BasePlugin):
         if new:
             self._wake.set()
 
+    async def _features_chat(self, event) -> None:
+        """Every chat line to the extra features (the ingredient vote reads !1 !2 ... here)."""
+        if not self._running:
+            return
+        for f in self.features:
+            try:
+                await f.on_chat(event)
+            except Exception:
+                log.exception("Schedule I chat handler")
+
+    async def _features_alert(self, payload: dict) -> None:
+        """Every stream alert to the extra features (paid alerts become cash drops, drops.py). Separate
+        from _on_alert, which only puts alerts on the phone when ``alerts_in_game`` is on."""
+        if not self._running or self.bridge is None:
+            return
+        for f in self.features:
+            try:
+                await f.on_alert(payload)
+            except Exception:
+                log.exception("Schedule I alert handler")
+
     async def _forward(self, kind: str, platform: str, user_id: str, username: str, display_name: str,
                        is_sub: bool = False) -> bool:
         """Co-op client: pass a join / leave to the host's list through our mod (POST /remote).
@@ -684,6 +736,10 @@ class Schedule1Customers(BasePlugin):
             return {"success": False, "error": "Schedule I plugin not started"}
         name = (req.command_name or "").lower()
         u = req.user
+        for f in self.features:              # !staff !topstaff !drop !tab !supply !sponsor !topdealers
+            answer = await f.execute(name, req)
+            if answer is not None:
+                return answer
         if name == "mug" and u is not None:
             return await self._mug(req)
         if name == "mixname" and u is not None:
@@ -900,7 +956,7 @@ class Schedule1Customers(BasePlugin):
             })
         return {"connected": self.connected, "loaded": self._loaded, "error": self.last_error,
                 "customers_in_game": len(self._customers), "named": len(self._sent or {}),
-                "people": people}
+                "people": people, "staff": await self.staff.snapshot(), "dealers": await self.dealers.snapshot()}
 
     async def add_person(self, platform: str, username: str) -> dict:
         """Streamer adds someone by hand from the page (no account id known, so keyed by name)."""
