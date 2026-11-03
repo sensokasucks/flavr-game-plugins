@@ -170,7 +170,7 @@
     {"key": "mixpick_vote_sec", "page": true, "group": "Chat picks the ingredient", "label": "Voting time (s)", "type": "number", "min": 5, "step": 5},
     {"key": "mixpick_options", "page": true, "group": "Chat picks the ingredient", "label": "Ingredients to vote on", "type": "number", "min": 2, "max": 9, "step": 1},
     {"key": "mixpick_from", "page": true, "group": "Chat picks the ingredient", "label": "Pick from", "type": "select", "options": ["carried", "all"],
-     "help": "carried = what you have on you (all of them when you carry none); all = any ingredient, for when you'll go and buy it"},
+     "help": "carried = only ingredients you have (where 'Ingredients come from' says: on you, nearby storage or every property; all of them when you have none); all = any ingredient in the game, even ones you don't have, for when you'll go and buy it"},
     {"key": "mixpick_auto_place", "page": true, "group": "Chat picks the ingredient", "label": "Put chat's pick in the station for me", "type": "checkbox",
      "help": "When the vote ends, the winning ingredient moves into the mixing station (as many as there is product, if you have that many). You still press Begin. Off = you put it in yourself."},
     {"key": "mixpick_take_from", "page": true, "group": "Chat picks the ingredient", "label": "Ingredients come from", "type": "select", "options": ["carried", "nearby", "owned"],

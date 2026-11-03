@@ -35,6 +35,8 @@ namespace FridgeSchedule1
     {
         // A vehicle counts as "near the station" within this many metres of it (a car in the driveway).
         private const float NearbyMetres = 30f;
+        private static bool _warned;      // storage warning already logged this run
+        private static int _lastCount = -1;
 
         /// <summary>Item slots to look in, the player's own first. <paramref name="takeFrom"/> is
         /// "carried", "nearby" or "owned"; anything else (or a co-op guest) means "carried".</summary>
@@ -68,7 +70,19 @@ namespace FridgeSchedule1
                 }
                 AddVehicles(list, takeFrom == "nearby" ? station : null);
             }
-            catch { /* a game update moved storage: the player's inventory still works */ }
+            catch (Exception ex)
+            {
+                // a game update moved storage: the player's inventory still works. Logged once per run.
+                if (!_warned)
+                    MelonLoader.MelonLogger.Warning("[FridgeSchedule1] can't read storage for the ingredient vote: " + ex.Message);
+                _warned = true;
+            }
+            if (list.Count != _lastCount)
+            {
+                // one line when the number changes, so a test shows whether storage was found
+                _lastCount = list.Count;
+                MelonLoader.MelonLogger.Msg($"[FridgeSchedule1] ingredient search ({takeFrom}): {list.Count} slots incl. storage");
+            }
             return list;
         }
 
