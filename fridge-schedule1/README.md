@@ -73,6 +73,32 @@ Esc, and chat's vote stops. Times, number of names and the other options are in 
 box on the Schedule I page (Games). The name is a normal product name, so it is saved like any mix you name.
 Works for co-op guests too: each player names their own mixes with their own chat.
 
+## Your crew: staff, cash drops, suppliers, dealers, ingredient vote
+
+Five more ways chat plays along. Each has its own box on the Schedule I page (Games) in Stream Core and
+all but the ingredient vote start switched off. Staff, cash drops, suppliers and dealer sponsors change the
+host's world, so in co-op only the host's chat can use them; the ingredient vote works for everyone.
+
+- **Staff named after chatters** (`!staff`, `!staff leave`, `!topstaff`). Your botanists, chemists, packagers
+  and cleaners carry the names of chatters who typed `!staff` (subscribers only by default), and chat hears
+  what they got done ("Dave (zackfan99) harvested a plant x3, watered a plant x5"), at most one line per
+  worker every two minutes. Names come off while the game saves, so they never reach your save file.
+- **Donations as cash drops**. Bits, Super Chats, tips, gifted subs and KICKs put in-game cash
+  (100 in-game $ per real $1 by default, with a cap per drop and per stream) into an empty dead drop near you.
+  You get a pop-up with the donor's message, the drop gets a map marker ("Cash drop from zackfan99"), and chat
+  hears when you pick it up. `!drop <note>` does the same for points.
+- **Chat picks the next ingredient**. The mixing station gets a **Let chat pick** button under Begin. Chat votes
+  `!1` `!2` ... for 30 s on up to six ingredients (the ones you carry, or any); the winner shows on the screen
+  and you put it in yourself, so a vote never uses stock you didn't mean to use.
+- **Suppliers** (`!tab albert 500`, `!supply albert`). `!tab` pays part of what you owe a supplier you've met
+  (0.2 in-game $ per point; points for more than you owe come back). `!supply` has the supplier leave five of
+  their goods at a dead drop "from" the chatter, with a marker. The supplier says so in a pop-up; nothing goes
+  into the phone's Messages (messages are saved).
+- **Dealers sponsored by chatters** (`!sponsor benji 800`, `!topdealers`). A chatter backs one of your recruited
+  dealers with points (a higher bid takes over; the outbid sponsor gets their points back). The dealer shows as
+  "Benji (zackfan99)", chat hears their sales, robberies and when they run out of product, and the sponsor earns
+  10 points per $100 the dealer sells.
+
 ## Co-op: everyone has the mod
 
 Every player in the lobby runs the mod (and their own Stream Core, if they stream). The **host's** game
@@ -218,14 +244,21 @@ and checks `X-Fridge-Token` when a Token is set.
 | `POST /nudge` | `{"npc"}`: newly named, met customer texts an order (host only); answered by event `nudge_result` (`npc`, `ok`, `msg`) |
 | `POST /find` | `{"npc", "by"}`: map marker on that customer for this player, labelled `by` |
 | `POST /mixvote` | `{"state", "ends_in", "options": [{"name", "votes"}], "winner", "ranked", "confirm", "msg"}`: chat's vote on a new mix's name (`off` / `suggest` / `vote` / `done` / `stopped`); the naming screen's button sends events `mix_vote` (`game_names`, `taken`, `effects`, `value`, `current`) and `mix_vote_stop` (`reason`: `button` / `closed`) |
+| `GET /crew` | `{"loaded", "boot", "staff": [{"id", "first", "last", "type", "property", "shown"}], "dealers": [{"id", "first", "last", "cash", "stock", "customers", "shown"}], "suppliers": [{"id", "first", "last", "unlocked", "debt"}]}` |
+| `POST /crewnames` | `{"staff": {id: {"first", "last"}}, "dealers": {...}}`: a list that's sent replaces that list (anyone not in it gets their own name back); a list left out stays as it was. Events `staff_job` (`id`, `job`), `dealer_sale` (`id`, `amount`, `deals`), `dealer_robbed` (`id`, `cash`, `items`), `dealer_empty` (`id`) |
+| `POST /drop` | `{"id", "by", "note", "cash", "label"}`: cash in a dead drop; answered by event `drop_result` (`drop`, `ok`, `msg`, `where`) and later `drop_taken` (`drop`) |
+| `POST /supplier` | `{"id", "action": "pay" / "deliver", "supplier", "by", "amount", "qty"}`; answered by event `supplier_result` (`req`, `ok`, `msg`, `paid`, `debt`, `where`, `what`), a delivery later by `drop_taken` |
+| `POST /mixpick` | `{"state", "ends_in", "options": [{"name", "votes"}], "winner", "msg"}`: chat's ingredient vote (`off` / `vote` / `done` / `stopped`); the station's button sends events `mixpick` (`product`, `carried`, `all`) and `mixpick_stop` (`reason`) |
 | `POST /remote` | `{"type": "join" / "leave", "platform", "user_id", "username", "display_name", "is_sub"}`: co-op guest only, passed to the host (whose Core gets `remote_join` / `remote_leave` events) |
 
 `GET /customers` also has `role` (`host`, or `client` when this game is a guest in a friend's lobby) and
-`board` (the Chat app's lists; the host's on a client). On a client `POST /names` and `/board` answer 409.
+`board` (the Chat app's lists; the host's on a client). On a client `POST /names`, `/board`, `/crewnames`, `/drop` and `/supplier` answer 409.
 Co-op data between the mods travels as Steam lobby data (`fs1.names`, `fs1.board`, `fs1.res` from the host,
 `fs1.req` member data from each guest), see `mod/LobbySync.cs`.
 
 `boot` changes every time the game starts (event numbers start again at 1).
 Code: `mod/Core.cs` (start, main-thread loop), `mod/CustomerWatcher.cs` (game side), `mod/BridgeServer.cs` (HTTP),
 `mod/Shared.cs` (what the two threads share), `mod/ChatApp.cs` (the phone app), `mod/Mugger.cs` (!mug),
-`mod/LobbySync.cs` (co-op sharing), `mod/MixNamer.cs` (the naming screen's "Let chat name it" button).
+`mod/LobbySync.cs` (co-op sharing), `mod/MixNamer.cs` (the naming screen's "Let chat name it" button),
+`mod/Crew.cs` (workers, dealers, suppliers; `RobPatch`), `mod/NpcNames.cs`, `mod/Drops.cs` (cash drops, supplier jobs),
+`mod/MixPicker.cs` (the mixing station's "Let chat pick" button), `mod/CrewShared.cs` + `mod/BridgeServer.Crew.cs`.

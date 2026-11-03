@@ -25,6 +25,8 @@
 //                              a co-op client too, each player names their own mixes -> {"success"}
 //   (events "mix_vote" {"game_names", "taken", "effects", "value", "current"} and "mix_vote_stop"
 //    {"reason": "button" | "closed"} come from the naming screen's "Let chat name it" button)
+//   GET /crew, POST /crewnames, /drop, /supplier, /mixpick: workers, dealers, cash drops, supplier
+//                              favours and the ingredient vote; see BridgeServer.Crew.cs
 //   GET /customers also says "role" ("host" / "client") and "board" (the lists, the host's on a client);
 //   each customer has "status" (locked / deal / offer / dealer / waiting) and "status_text" (words).
 //   On a client, POST /names and /board answer 409: the host decides.
@@ -46,7 +48,7 @@ using MelonLoader;
 
 namespace FridgeSchedule1
 {
-    internal sealed class BridgeServer
+    internal sealed partial class BridgeServer   // crew routes: BridgeServer.Crew.cs
     {
         private const int MaxBodyBytes = 256 * 1024;   // a full set of names or a board is a few KB
 
@@ -313,6 +315,9 @@ namespace FridgeSchedule1
                 Json(ctx, 200, new Dictionary<string, object> { ["success"] = true });
                 return;
             }
+
+            if (HandleCrew(ctx, req.HttpMethod, path))   // BridgeServer.Crew.cs
+                return;
 
             Json(ctx, 404, Error("not found"));
         }

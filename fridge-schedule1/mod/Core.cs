@@ -16,6 +16,11 @@
 //   ImageCache.cs      alert pictures for the Alerts tab, downloaded once
 //   LobbySync.cs       co-op: the host shares names / lists, clients forward joins and mugs
 //   MixNamer.cs        "Let chat name it" button on the new mix naming screen (chat votes the name)
+//   Crew.cs            workers named after chatters, dealer sponsors, the suppliers list (+ RobPatch)
+//   NpcNames.cs        reads / sets a worker's or dealer's shown name
+//   Drops.cs           cash drops from donations, supplier !tab / !supply, dead drop markers
+//   MixPicker.cs       "Let chat pick" button on the mixing station (chat votes the next ingredient)
+//   CrewShared.cs      what the HTTP thread and those four share (BridgeServer.Crew.cs has their routes)
 //
 // Unity and game objects may only be used on the main thread, so the HTTP thread only reads and
 // writes Shared; OnUpdate below moves data between Shared and the game.
@@ -23,7 +28,7 @@
 using System;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.7.0", "sensokasucks",
+[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.8.0", "sensokasucks",
     "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
@@ -44,6 +49,9 @@ namespace FridgeSchedule1
         private Mugger _mugger;
         private LobbySync _lobby;
         private MixNamer _mixNamer;
+        private Crew _crew;                   // workers / dealers / suppliers (Crew.cs)
+        private Drops _drops;                 // cash drops and supplier jobs (Drops.cs)
+        private MixPicker _mixPicker;         // mixing station "Let chat pick" button
         private bool _inWorld;                // a save is loaded (scene "Main")
         // Order nudges waiting for their pause (real-time seconds), from POST /nudge; RunDueNudges.
         private const float NudgeDelaySec = 8f;
@@ -70,6 +78,9 @@ namespace FridgeSchedule1
             _mugger = new Mugger(LoggerInstance);
             _lobby = new LobbySync(LoggerInstance, _watcher, _mugger);
             _mixNamer = new MixNamer(LoggerInstance);
+            _crew = new Crew(LoggerInstance);
+            _drops = new Drops(LoggerInstance);
+            _mixPicker = new MixPicker(LoggerInstance);
             try
             {
                 _server = new BridgeServer(_bindAddress.Value, _port.Value, _token.Value, LoggerInstance);
@@ -87,9 +98,16 @@ namespace FridgeSchedule1
             // "Main" is the playable world (a save is loaded); "Menu" is the title screen.
             _inWorld = sceneName == "Main";
             if (_inWorld)
+            {
                 _watcher.OnWorldLoaded();
+                _crew.OnWorldLoaded();
+            }
             else
+            {
                 _watcher.OnWorldUnloaded();
+                _crew.OnWorldUnloaded();
+            }
+            _drops.Clear();                      // the old scene's drops and markers are gone
             _mugger.Clear();
             _nudges.Clear();
             CustomerStatus.StopFinding(null);    // S1API drops map markers with the scene anyway
@@ -116,6 +134,9 @@ namespace FridgeSchedule1
             ImageCache.Tick();        // alert pictures that finished downloading
             ChatApp.Current?.Tick();
             _mixNamer.Tick();         // the naming screen's "Let chat name it" button (every frame: countdown)
+            _mixPicker.Tick();        // the mixing station's "Let chat pick" button
+            _crew.Tick();             // crew names Core sent (POST /crewnames)
+            _drops.Tick(_inWorld);    // one cash drop / supplier job (POST /drop, /supplier)
 
             if (UnityEngine.Time.realtimeSinceStartup < _nextRefresh)
                 return;
@@ -123,6 +144,8 @@ namespace FridgeSchedule1
             if (_inWorld)
                 _lobby.Tick();     // before Refresh, so a client applies the host's latest names
             _watcher.Refresh();
+            _crew.Refresh();          // GET /crew lists, names, dealer sales / empty stock
+            _drops.Watch();           // emptied drops -> "drop_taken"
             _mugger.Tick();
             RunDueNudges();
             CustomerStatus.TickFind();

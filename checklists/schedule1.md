@@ -42,6 +42,11 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
       numbers / spaces / `' & . -`, taken names and `mix_blocked_words` refused, hidden / red-flagged chatters'
       ideas ignored. The mod only uses names the game itself accepts (its Confirm button lit). State names
       `off` / `suggest` / `vote` / `done` / `stopped` match in mixvote.py, MixNamer.cs and the mock.
+- [ ] Crew features (`staff.py`, `drops.py`, `mixpick.py`, `suppliers.py`, `dealers.py`; mod `Crew.cs`, `Drops.cs`,
+      `MixPicker.cs`): all but the ingredient vote are off until switched on; every point spend has a refund path
+      when the game refuses or doesn't answer in 30 s; staff / dealer chatter names come off during game saves
+      (`Crew.OnSaveStart`) and supplier favours never write phone messages; `/crewnames`, `/drop`, `/supplier`
+      are host only (409 on a co-op client). Event / field names match in the Python files, the mod and the mock.
 - [ ] Game objects only touched on the main thread (`Core.OnUpdate`); the HTTP thread only uses `Shared`.
 - [ ] Every game call in `CustomerWatcher` sits in try/catch: a game update gives log warnings, not a crash.
 - [ ] `START Schedule1 Mock.bat` / `fridge-schedule1/START Mock.bat` run without the game.
@@ -73,6 +78,16 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] New mix naming screen shows **Let chat name it** under Confirm (same look); pressing it gives a chat line, the
       countdown and ideas under the button, then the vote; the winner is typed in and confirmed (or only typed in
       with `mix_auto_confirm` off). Pressing it again / Esc / own name stops it and chat hears so.
+- [ ] Staff: `!staff` puts a chatter name on a worker (check the name over their head and in the Employees
+      list); jobs give "harvested a plant x3"-style lines; save + reload: the save has the worker's own name.
+- [ ] Cash drops: an Alerts page test Super Chat puts cash in a nearby dead drop with a pop-up note and a map
+      marker; emptying it gives the "picked up" chat line and the marker goes.
+- [ ] Mixing station: **Let chat pick** sits under Begin; the vote shows under it; the winner line appears;
+      pressing again / closing the station stops it.
+- [ ] Suppliers: `!tab albert 500` lowers Albert's debt in the phone; `!supply albert` leaves goods in a drop with a
+      marker. Note if the debt change doesn't stick after reload (ChangeDebt reflection).
+- [ ] Dealers: `!sponsor benji 800` shows "Benji (sponsor)"; a deal he finishes gives a sales line and kickback
+      points; a robbery gives the robbed line (RobPatch); selling out gives "out of product".
 - [ ] Co-op with two players: the guest sees the host's chatter names and Chat app lists; a guest chatter's
       `!customer` gets a customer; a guest chatter's `!mug` hits the guest's player. Note whether order / deal
       lines fire on the guest, the host, or both.
