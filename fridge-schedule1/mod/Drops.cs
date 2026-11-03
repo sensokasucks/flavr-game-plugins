@@ -7,7 +7,7 @@
 //   POST /supplier {"id", "action": "pay", "supplier", "by", "amount"}  !tab (suppliers.py): the
 //                  supplier's debt goes down by "amount" in-game $ (never below 0).
 //                  {"action": "deliver", "qty"}  !supply: "qty" of one of the supplier's goods (what they
-//                  sell on the phone) goes into a dead drop with a marker.
+//                  sell on the phone, Supplier.Shop.Listings) goes into a dead drop with a marker.
 //                  Answer: event "supplier_result" {"req", "ok", "msg", "paid", "debt", "where", "what"}.
 //   Either kind of drop, once emptied, sends "drop_taken" {"drop": the same id} and loses its marker.
 //
@@ -186,13 +186,12 @@ namespace FridgeSchedule1
                 Answer(r, false, "action must be pay or deliver");
                 return;
             }
-            var items = s.OnlineShopItems;
-            if (items == null || items.Length == 0)
+            var listing = PickListing(s);
+            if (listing == null)
             {
-                Answer(r, false, $"{first} has nothing to deliver");
+                Answer(r, false, $"{first} has nothing to deliver right now");
                 return;
             }
-            var listing = items[UnityEngine.Random.Range(0, items.Length)];
             int qty = Math.Max(1, r.qty);
             var item = listing.Item.GetDefaultInstance(qty);
             var drop = PickDrop();
@@ -207,6 +206,24 @@ namespace FridgeSchedule1
             Open(r.id, drop, $"{first}: delivery from {r.by}");
             Shared.AddNotice(new Notice { title = first, text = $"{r.by} sent you {what}. It's at {where}.", kind = "system" });
             Answer(r, true, "", where: where, what: what);
+        }
+
+        // One of the goods the supplier sells on the phone (Supplier.Shop.Listings), at random, preferring
+        // ones the game would deliver and has in stock; null when the shop lists nothing.
+        private static Il2CppScheduleOne.UI.Shop.ShopListing PickListing(S1Supplier s)
+        {
+            var all = s.Shop != null ? s.Shop.Listings : null;
+            if (all == null || all.Count == 0)
+                return null;
+            var good = new List<Il2CppScheduleOne.UI.Shop.ShopListing>();
+            for (int i = 0; i < all.Count; i++)
+                if (all[i] != null && all[i].Item != null && all[i].CanBeDelivered && all[i].IsInStock)
+                    good.Add(all[i]);
+            if (good.Count == 0)
+                for (int i = 0; i < all.Count; i++)
+                    if (all[i] != null && all[i].Item != null)
+                        good.Add(all[i]);
+            return good.Count == 0 ? null : good[UnityEngine.Random.Range(0, good.Count)];
         }
 
         // The game's ChangeDebt is private and networked; Il2CppInterop may or may not show it as public,

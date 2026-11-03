@@ -6,7 +6,7 @@
 //            plant") becomes event "staff_job" {"id", "job"} so chat can hear what its worker did.
 //   Dealers  (Dealer.AllPlayerDealers, recruited) GET /crew "dealers"; POST /crewnames "dealers" shows the
 //            sponsor in brackets as the dealer's last name (dealers.py dealer_label). Events
-//            "dealer_sale" {"id", "amount", "deals"} (cash went up after finished deals: the sponsor's
+//            "dealer_sale" {"id", "amount", "deals"} (cash went up after finished deals, counted by DealPatch: the sponsor's
 //            kickback), "dealer_robbed" {"id", "cash", "items"} and "dealer_empty" {"id"} (no product left).
 //   Suppliers (every Supplier NPC)              GET /crew "suppliers" with what the streamer owes;
 //            Drops.cs pays debts and makes deliveries.
@@ -82,7 +82,7 @@ namespace FridgeSchedule1
         // Every renamable NPC seen by the last Refresh, for the save-time name swap.
         private readonly Dictionary<string, S1NPC> _byId = new Dictionary<string, S1NPC>();
 
-        private readonly HashSet<int> _hooked = new HashSet<int>();      // workers / dealers listened to (Unity instance id)
+        private readonly HashSet<int> _hooked = new HashSet<int>();      // workers listened to (Unity instance id)
         private bool _saveHooked;
         private bool _saving;                         // between onSaveStart and onSaveComplete: own names on
 
@@ -182,7 +182,6 @@ namespace FridgeSchedule1
                         continue;
                     var own = Own(d);
                     KeepName(d, _wantDealers);
-                    HookDealer(d);
                     WatchDealer(d);
                     dealers.Add(new CrewMember
                     {
@@ -343,23 +342,15 @@ namespace FridgeSchedule1
 
         // ---- dealers
 
-        private void HookDealer(S1Dealer d)
+        // DealPatch (Harmony, on Dealer.CompletedDeal): one more finished deal waiting for its cash.
+        // A patch instead of a listener because the game's deal event changed from a UnityEvent
+        // (onCompleteDeal) to a plain Action (OnCompleteDeal) between versions; the method stayed.
+        internal void DealDone(S1Dealer d)
         {
-            if (!_hooked.Add(d.GetInstanceID()))
+            if (d == null || !d.IsRecruited || string.IsNullOrEmpty(d.ID))
                 return;
-            var id = d.ID;
-            try
-            {
-                d.onCompleteDeal?.AddListener(DelegateSupport.ConvertDelegate<UnityAction>(new Action(() =>
-                {
-                    _dealsWaiting.TryGetValue(id, out var w);
-                    _dealsWaiting[id] = (w.deals + 1, w.deals == 0 ? UnityEngine.Time.realtimeSinceStartup : w.since);
-                })));
-            }
-            catch (Exception ex)
-            {
-                _log.Warning($"can't follow dealer {id}'s deals: {ex.Message}");
-            }
+            _dealsWaiting.TryGetValue(d.ID, out var w);
+            _dealsWaiting[d.ID] = (w.deals + 1, w.deals == 0 ? UnityEngine.Time.realtimeSinceStartup : w.since);
         }
 
         // Cash up after finished deals = a sale (the sponsor's kickback in dealers.py). Cash down = the
@@ -409,6 +400,17 @@ namespace FridgeSchedule1
             {
                 _log.Warning("robbery report failed: " + ex.Message);
             }
+        }
+    }
+
+    /// <summary>Harmony patch: the game calls Dealer.CompletedDeal when a dealer finishes a deal; Crew
+    /// counts it and reports the sale once the deal's cash shows up (Crew.WatchDealer).</summary>
+    [HarmonyPatch(typeof(S1Dealer), nameof(S1Dealer.CompletedDeal))]
+    internal static class DealPatch
+    {
+        private static void Postfix(S1Dealer __instance)
+        {
+            try { Crew.Instance?.DealDone(__instance); } catch { /* never break the game's deal */ }
         }
     }
 

@@ -23,7 +23,7 @@
 using System;
 using System.Collections.Generic;
 using MelonLoader;
-using S1API.UI;
+using S1API.Utils;   // ButtonUtils (same as MixNamer.cs / ChatApp.cs)
 using UnityEngine;
 using UnityEngine.UI;
 using S1Canvas = Il2CppScheduleOne.UI.Stations.MixingStationInterface;
