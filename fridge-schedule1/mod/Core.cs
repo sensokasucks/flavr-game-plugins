@@ -20,6 +20,7 @@
 //   NpcNames.cs        reads / sets a worker's or dealer's shown name
 //   Drops.cs           cash drops from donations, supplier !tab / !supply, dead drop markers
 //   MixPicker.cs       "Let chat pick" button on the mixing station (chat votes the next ingredient)
+//   IngredientSources.cs  where that vote / auto-place look for ingredients (inventory, storage, vehicles)
 //   CrewShared.cs      what the HTTP thread and those four share (BridgeServer.Crew.cs has their routes)
 //
 // Unity and game objects may only be used on the main thread, so the HTTP thread only reads and
@@ -28,7 +29,7 @@
 using System;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.8.0", "sensokasucks",
+[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.8.1", "sensokasucks",
     "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 

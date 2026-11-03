@@ -6,14 +6,16 @@
 // Begin button. This file adds our button next to Begin and a short status text under it.
 //
 // Flow (each player's own screen and own Stream Core, host or co-op guest alike):
-//   1. Button pressed -> event "mixpick" {"product", "carried", "all"} for Core (GET /events):
-//      the product in the station, the mixing ingredients in the player's hotbar, every mixing
-//      ingredient in the game (ProductManager.ValidMixIngredients).
+//   1. Button pressed -> event "mixpick" {"product", "carried", "nearby", "owned", "all"} for Core
+//      (GET /events): the product in the station, the mixing ingredients on the player / also in
+//      storage near the station / also in storage at any owned property, and every mixing ingredient
+//      in the game (ProductManager.ValidMixIngredients).
 //   2. Core (plugins/schedule1/mixpick.py) runs the vote (!1 !2 ...) and keeps sending where it is
 //      (POST /mixpick -> CrewShared.SetPick).
 //   3. State "done": the status text says "Chat picked Gasoline". With Core's mixpick_auto_place on
-//      ("place": true) the winner is moved from the player's inventory into the ingredient slot
-//      (Place); otherwise the streamer puts it in. Begin is never pressed for them.
+//      ("place": true) the winner is moved into the ingredient slot (Place) from the player's
+//      inventory, or also from storage ("take_from": "nearby" / "owned", IngredientSources.cs);
+//      otherwise the streamer puts it in. Begin is never pressed for them.
 // Pressing the button again, or closing the screen, sends "mixpick_stop".
 //
 // Callers: Core.OnUpdate calls Tick() every frame. Main thread only (Unity UI). State names ("off",
@@ -120,11 +122,13 @@ namespace FridgeSchedule1
                 _note = "You stopped chat's vote.";
                 return;
             }
-            var (carried, all) = Ingredients();
+            var (carried, nearby, owned, all) = Ingredients(canvas);
             Shared.AddEvent("mixpick", new Dictionary<string, object>
             {
                 ["product"] = ProductName(canvas),
                 ["carried"] = carried,
+                ["nearby"] = nearby,
+                ["owned"] = owned,
                 ["all"] = all,
             });
             _mode = "asking";
@@ -156,18 +160,19 @@ namespace FridgeSchedule1
                 case "done":
                     _mode = "idle";
                     Shared.AddFeed($"Chat picked {s.winner} for your mix");
-                    var placed = s.place ? Place(s.winner) : "";
+                    var placed = s.place ? Place(s.winner, s.takeFrom) : "";
                     _note = $"Chat picked <color=#54E717>{Esc(s.winner)}</color>. " +
                             (placed.Length > 0 ? placed : "Put it in and press Begin.");
                     break;
             }
         }
 
-        // Core's mixpick_auto_place: move the winner from the player's inventory into the station's
-        // ingredient slot (MixingStation.MixerSlot), as many as there is product (capped by what fits and
-        // what the player carries). The game then updates its preview by itself; StationContentsChanged
+        // Core's mixpick_auto_place: move the winner into the station's ingredient slot
+        // (MixingStation.MixerSlot), as many as there is product (capped by what fits and what there is),
+        // from the places Core's mixpick_take_from names (IngredientSources: the player's inventory, then
+        // storage near the station or at every owned property). The game then updates its preview by itself; StationContentsChanged
         // is called as well in case this build doesn't. Never presses Begin. Returns the status words.
-        private string Place(string winner)
+        private string Place(string winner, string takeFrom)
         {
             try
             {
@@ -187,10 +192,12 @@ namespace FridgeSchedule1
                 if (want <= 0)
                     return "It's already in: press Begin.";
                 int moved = 0;
-                var slots = Il2CppScheduleOne.DevUtilities.PlayerSingleton<S1Inventory>.Instance?.GetAllInventorySlots();
-                for (int i = 0; slots != null && i < slots.Count && moved < want; i++)
+                var slots = IngredientSources.Slots(takeFrom, station);   // the player's own slots first
+                for (int i = 0; i < slots.Count && moved < want; i++)
                 {
                     var slot = slots[i];
+                    if (slot == null || slot.IsLocked || slot.IsRemovalLocked)
+                        continue;                    // someone has that shelf open, or the game froze it
                     var item = slot?.ItemInstance;
                     if (item == null || item.Definition == null || item.Definition.ID != id || slot.Quantity <= 0)
                         continue;
@@ -208,9 +215,11 @@ namespace FridgeSchedule1
                 }
                 try { canvas.StationContentsChanged(); } catch { /* the game redraws on its own */ }
                 if (moved == 0)
-                    return "You don't carry any: go get some, then press Begin.";
+                    return takeFrom == "carried" || string.IsNullOrEmpty(takeFrom)
+                        ? "You don't carry any: go get some, then press Begin."
+                        : "None in your inventory or storage: go get some, then press Begin.";
                 Shared.AddFeed($"Put {moved}x {winner} in the mixing station");
-                return moved < want ? $"Put in the {moved} you carry. Press Begin." : "It's in: press Begin.";
+                return moved < want ? $"Put in the {moved} you have. Press Begin." : "It's in: press Begin.";
             }
             catch (Exception ex)
             {
@@ -243,10 +252,12 @@ namespace FridgeSchedule1
             }
         }
 
-        // (ingredients in the player's hotbar, every mixing ingredient), by display name.
-        private static (List<string> carried, List<string> all) Ingredients()
+        // Mixing ingredients by display name: on the player ("carried"), on the player + storage near
+        // the station ("nearby"), on the player + storage at every owned property ("owned"), and every
+        // mixing ingredient in the game ("all"). Core's mixpick_take_from picks which of the first three
+        // the vote uses (mixpick.py); the same places are where Place takes the winner from.
+        private static (List<string> carried, List<string> nearby, List<string> owned, List<string> all) Ingredients(S1Canvas canvas)
         {
-            var carried = new List<string>();
             var all = new List<string>();
             var ids = new Dictionary<string, string>();
             var valid = Il2CppScheduleOne.DevUtilities.NetworkSingleton<S1Products>.Instance?.ValidMixIngredients;
@@ -257,18 +268,26 @@ namespace FridgeSchedule1
                 ids[valid[i].ID] = valid[i].Name;
                 all.Add(valid[i].Name);
             }
-            try
+            var station = canvas != null ? canvas.Station : null;
+            return (Names(IngredientSources.Slots("carried", station), ids),
+                    Names(IngredientSources.Slots("nearby", station), ids),
+                    Names(IngredientSources.Slots("owned", station), ids), all);
+        }
+
+        private static List<string> Names(List<Il2CppScheduleOne.ItemFramework.ItemSlot> slots, Dictionary<string, string> ids)
+        {
+            var names = new List<string>();
+            foreach (var slot in slots)
             {
-                var slots = Il2CppScheduleOne.DevUtilities.PlayerSingleton<S1Inventory>.Instance?.hotbarSlots;
-                for (int i = 0; slots != null && i < slots.Count; i++)
+                try
                 {
-                    var def = slots[i]?.ItemInstance?.Definition;
-                    if (def != null && ids.TryGetValue(def.ID, out var name) && !carried.Contains(name))
-                        carried.Add(name);
+                    var def = slot?.ItemInstance?.Definition;
+                    if (def != null && slot.Quantity > 0 && ids.TryGetValue(def.ID, out var name) && !names.Contains(name))
+                        names.Add(name);
                 }
+                catch { /* a slot that went away */ }
             }
-            catch { /* no inventory: chat votes from every ingredient (mixpick.py falls back to "all") */ }
-            return (carried, all);
+            return names;
         }
 
         private void Redraw()

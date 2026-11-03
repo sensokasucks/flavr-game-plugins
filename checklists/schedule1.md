@@ -86,6 +86,8 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
       pressing again / closing the station stops it.
       With `mixpick_auto_place` on, the winner moves from the inventory into the ingredient slot (product's
       quantity, or what's carried), the preview updates, and Begin is NOT pressed.
+      `mixpick_take_from` nearby / owned: shelves and racks (not bed lockers, not dead drops) and car trunks are
+      used, the vote's list includes them, and a co-op guest only uses their own inventory.
 - [ ] Suppliers: `!tab albert 500` lowers Albert's debt in the phone; `!supply albert` leaves goods in a drop with a
       marker. Note if the debt change doesn't stick after reload (ChangeDebt reflection).
 - [ ] Dealers: `!sponsor benji 800` shows "Benji (sponsor)"; a deal he finishes gives a sales line and kickback

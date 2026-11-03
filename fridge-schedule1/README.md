@@ -90,7 +90,9 @@ host's world, so in co-op only the host's chat can use them; the ingredient vote
 - **Chat picks the next ingredient**. The mixing station gets a **Let chat pick** button under Begin. Chat votes
   `!1` `!2` ... for 30 s on up to six ingredients (the ones you carry, or any); the winner shows on the screen
   and you put it in yourself. With **Put chat's pick in the station for me** ticked, the mod moves it from your
-  inventory into the station for you (as many as there is product); you still press Begin.
+  inventory into the station for you (as many as there is product); you still press Begin. **Ingredients come
+  from** can also look in shelves, racks and safes at the station's property and your nearby vehicles (`nearby`),
+  or at every property you own (`owned`); the vote's list follows the same setting.
 - **Suppliers** (`!tab albert 500`, `!supply albert`). `!tab` pays part of what you owe a supplier you've met
   (0.2 in-game $ per point; points for more than you owe come back). `!supply` has the supplier leave five of
   their goods at a dead drop "from" the chatter, with a marker. The supplier says so in a pop-up; nothing goes
@@ -249,7 +251,7 @@ and checks `X-Fridge-Token` when a Token is set.
 | `POST /crewnames` | `{"staff": {id: {"first", "last"}}, "dealers": {...}}`: a list that's sent replaces that list (anyone not in it gets their own name back); a list left out stays as it was. Events `staff_job` (`id`, `job`), `dealer_sale` (`id`, `amount`, `deals`), `dealer_robbed` (`id`, `cash`, `items`), `dealer_empty` (`id`) |
 | `POST /drop` | `{"id", "by", "note", "cash", "label"}`: cash in a dead drop; answered by event `drop_result` (`drop`, `ok`, `msg`, `where`) and later `drop_taken` (`drop`) |
 | `POST /supplier` | `{"id", "action": "pay" / "deliver", "supplier", "by", "amount", "qty"}`; answered by event `supplier_result` (`req`, `ok`, `msg`, `paid`, `debt`, `where`, `what`), a delivery later by `drop_taken` |
-| `POST /mixpick` | `{"state", "ends_in", "options": [{"name", "votes"}], "winner", "msg"}`: chat's ingredient vote (`off` / `vote` / `done` / `stopped`); the station's button sends events `mixpick` (`product`, `carried`, `all`) and `mixpick_stop` (`reason`) |
+| `POST /mixpick` | `{"state", "ends_in", "options": [{"name", "votes"}], "winner", "place", "take_from", "msg"}`: chat's ingredient vote (`off` / `vote` / `done` / `stopped`); the station's button sends events `mixpick` (`product`, `carried`, `nearby`, `owned`, `all`) and `mixpick_stop` (`reason`) |
 | `POST /remote` | `{"type": "join" / "leave", "platform", "user_id", "username", "display_name", "is_sub"}`: co-op guest only, passed to the host (whose Core gets `remote_join` / `remote_leave` events) |
 
 `GET /customers` also has `role` (`host`, or `client` when this game is a guest in a friend's lobby) and
@@ -262,4 +264,4 @@ Code: `mod/Core.cs` (start, main-thread loop), `mod/CustomerWatcher.cs` (game si
 `mod/Shared.cs` (what the two threads share), `mod/ChatApp.cs` (the phone app), `mod/Mugger.cs` (!mug),
 `mod/LobbySync.cs` (co-op sharing), `mod/MixNamer.cs` (the naming screen's "Let chat name it" button),
 `mod/Crew.cs` (workers, dealers, suppliers; `RobPatch`), `mod/NpcNames.cs`, `mod/Drops.cs` (cash drops, supplier jobs),
-`mod/MixPicker.cs` (the mixing station's "Let chat pick" button), `mod/CrewShared.cs` + `mod/BridgeServer.Crew.cs`.
+`mod/MixPicker.cs` (the mixing station's "Let chat pick" button), `mod/IngredientSources.cs` (where ingredients are taken from), `mod/CrewShared.cs` + `mod/BridgeServer.Crew.cs`.

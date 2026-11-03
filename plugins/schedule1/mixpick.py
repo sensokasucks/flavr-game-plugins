@@ -3,6 +3,7 @@ Chat picks the next mixing ingredient: the "Let chat pick" button on Schedule I'
 
 The streamer puts a product in a mixing station and presses "Let chat pick" (fridge-schedule1/mod/
 MixPicker.cs). The mod sends event "mixpick" {"product", "carried": [ingredient names on the player],
+"nearby": [also in storage near the station], "owned": [also in storage at any owned property],
 "all": [every mixing ingredient in the game]}. Chat then votes ``!1`` ``!2`` ... for
 ``mixpick_vote_sec`` seconds; the winner shows on the station screen ("Chat picked Gasoline") and the
 streamer puts it in. Nothing is put in for them, so a vote can't waste stock.
@@ -14,10 +15,11 @@ ingredient"): mixpick_enabled, mixpick_vote_sec, mixpick_options (how many ingre
 mixpick_from ("carried" = only ingredients the streamer has on them, falling back to all when they
 carry none; "all" = any ingredient, for when the streamer will go and buy it), mixpick_auto_place (the
 mod moves the winner from the streamer's inventory into the station's ingredient slot; sent as "place"
-with state "done").
+with state "done"), mixpick_take_from ("carried" / "nearby" / "owned": where the streamer's
+ingredients are looked for, both for the "carried" vote list and for auto-place; sent as "take_from").
 
 The state goes to the mod with POST /mixpick {"state", "ends_in", "options": [{"name", "votes"}],
-"winner", "place", "msg"}; state names ("off", "vote", "done", "stopped") must match MixPicker.cs. Works for a
+"winner", "place", "take_from", "msg"}; state names ("off", "vote", "done", "stopped") must match MixPicker.cs. Works for a
 co-op guest too: each player picks for their own station.
 """
 
@@ -50,6 +52,17 @@ def pick_options(carried: list[str], every: list[str], source: str, n: int, rand
     if len(names) > n:
         names = rand.sample(names, n)
     return sorted(names, key=str.lower)
+
+
+def have_list(ev: dict, take_from: str) -> list[str]:
+    """The ingredients the streamer has, from the mod's "mixpick" event: "carried" (on them), "nearby"
+    (also storage near the station) or "owned" (also storage at every owned property), per
+    ``mixpick_take_from``. A mod from before 0.8.1 only sends "carried", which is then used."""
+    key = take_from if take_from in ("nearby", "owned") else "carried"
+    got = ev.get(key)
+    if not isinstance(got, list):
+        got = ev.get("carried") or []
+    return [str(x) for x in got]
 
 
 class MixPick(Feature):
@@ -85,7 +98,7 @@ class MixPick(Feature):
         if self.p.mix is not None and self.p.mix.phase in ("suggest", "vote"):
             await self.p.bridge.mixpick({"state": "off", "msg": "Chat is still naming a mix. Try again after that vote."})
             return
-        opts = pick_options([str(x) for x in ev.get("carried") or []], [str(x) for x in ev.get("all") or []],
+        opts = pick_options(have_list(ev, str(s.get("mixpick_take_from") or "carried")), [str(x) for x in ev.get("all") or []],
                             str(s.get("mixpick_from") or "carried"), int(self.num("mixpick_options", 6, 2)), self.rand)
         if len(opts) < 2:
             await self.p.bridge.mixpick({"state": "off", "msg": "Not enough ingredients to vote on. Carry a few, "
@@ -119,7 +132,8 @@ class MixPick(Feature):
         c = v.counts()
         return {"state": v.phase, "ends_in": max(0, round(v.ends_at - now)),
                 "options": [{"name": o, "votes": c[i]} for i, o in enumerate(v.options)], "winner": v.winner,
-                "place": bool(self.s().get("mixpick_auto_place", False))}
+                "place": bool(self.s().get("mixpick_auto_place", False)),
+                "take_from": str(self.s().get("mixpick_take_from") or "carried")}
 
     def board(self) -> dict:
         b = self.vote.board(self.p._prefix())

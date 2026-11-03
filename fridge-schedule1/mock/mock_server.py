@@ -295,8 +295,11 @@ class World:
     def mixpick_button(self, carried: list[str] | None = None, product: str = "OG Kush") -> dict:
         """The streamer pressed "Let chat pick" on a mixing station (fields as MixPicker.cs sends)."""
         with self.lock:
-            return self.add_event({"type": "mixpick", "product": product,
-                                   "carried": carried if carried is not None else ["Cuke", "Banana", "Gasoline"],
+            have = carried if carried is not None else ["Cuke", "Banana", "Gasoline"]
+            # "nearby" / "owned": also in storage near the station / at any owned property (IngredientSources.cs)
+            return self.add_event({"type": "mixpick", "product": product, "carried": have,
+                                   "nearby": have + [x for x in ("Iodine",) if x not in have],
+                                   "owned": have + [x for x in ("Iodine", "Mega Bean") if x not in have],
                                    "all": list(INGREDIENTS)})
 
     def mixpick_stop(self) -> dict:
