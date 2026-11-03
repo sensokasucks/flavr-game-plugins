@@ -25,10 +25,11 @@ import httpx
 from core import plugin_manifest
 from core.config import DEFAULTS
 from core.event_bus import EventBus
-from core.models import ChatUser, ExecuteRequest, Platform
+from core.models import ChatEvent, ChatUser, ExecuteRequest, Platform
 from core.plugins import PluginManager
 from core.store import Store
 
+from plugins.schedule1.mixvote import MixVote, clean_mix_name, has_blocked_word
 from plugins.schedule1.roster import clean_name, desired_names, person_key, plan_assignments, plan_rotation
 
 REPO = Path(__file__).resolve().parents[3]
@@ -148,6 +149,56 @@ class PlanTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------- against the mock mod
+
+class MixVoteTests(unittest.TestCase):
+    """mixvote.py: the "Let chat name it" round without network or chat."""
+
+    def test_clean_mix_name(self):
+        self.assertEqual(clean_mix_name("  blue   dream 🔥 "), "Blue Dream")
+        self.assertEqual(clean_mix_name("<b>x</b>"), "Bxb")                  # tags can't reach the game's UI
+        self.assertEqual(clean_mix_name("a"), "")                             # too short
+        self.assertEqual(clean_mix_name("Sticky Icky Green Monster Juice", max_len=20), "Sticky Icky Green")
+        self.assertTrue(has_blocked_word("Grass Bomb", "bomb, x"))
+        self.assertFalse(has_blocked_word("Grass", []))
+
+    def test_ideas_then_vote_then_ranked(self):
+        v = MixVote(["Hazy Kush", "Cosmic Dream", "OG Kush"], taken=["OG Kush"], effects=["Munchies"], value="$64",
+                    now=0, suggest_sec=30, vote_sec=30, options=3)
+        self.assertEqual(v.game_names, ["Hazy Kush", "Cosmic Dream"])         # taken names dropped
+        self.assertEqual(v.phase, "suggest")
+        self.assertTrue(v.suggest("t:1", "blue dream")[0])
+        self.assertTrue(v.suggest("t:2", "Blue Dream")[0])                    # same idea, second backer
+        self.assertTrue(v.suggest("t:3", "Purple Rain")[0])
+        self.assertTrue(v.suggest("t:3", "Grape Ape")[0])                     # replaces t:3's idea
+        self.assertEqual(v.suggest("t:4", "og kush"), (False, "Og Kush is already a product in this save"))
+        self.assertFalse(v.vote("t:1", 0))                                    # no voting yet
+        self.assertIsNone(v.tick(29))
+        self.assertEqual(v.tick(30), "vote")
+        # 3 options: two chat ideas (most backers first) + one game idea kept
+        self.assertEqual(v.options, ["Blue Dream", "Grape Ape", "Hazy Kush"])
+        v.vote("t:1", 1)
+        v.vote("t:2", 1)
+        v.vote("t:3", 2)
+        v.vote("t:3", 0)                                                      # changed vote
+        self.assertFalse(v.suggest("t:9", "Late Idea")[0])
+        self.assertEqual(v.counts(), [1, 2, 0])
+        self.assertEqual(v.tick(60), "done")
+        self.assertEqual(v.winner, "Grape Ape")
+        self.assertEqual(v.ranked, ["Grape Ape", "Blue Dream", "Hazy Kush", "Cosmic Dream"])
+        self.assertEqual(v.mod_state(60, confirm=True)["state"], "done")
+
+    def test_no_ideas_votes_on_game_names_and_no_votes_keeps_order(self):
+        v = MixVote(["Hazy Kush", "Cosmic Dream"], [], [], "", now=0, suggest_sec=10, vote_sec=10)
+        v.tick(10)
+        self.assertEqual(v.options, ["Hazy Kush", "Cosmic Dream"])
+        v.tick(20)
+        self.assertEqual(v.winner, "Hazy Kush")                               # nobody voted: game's own pick
+        # suggest_sec 0: straight to the vote
+        self.assertEqual(MixVote(["A b", "C d"], [], [], "", now=0, suggest_sec=0, vote_sec=10).phase, "vote")
+        # only one possible name: done without a vote
+        one = MixVote(["Only One"], [], [], "", now=0, suggest_sec=0, vote_sec=10)
+        self.assertEqual((one.phase, one.winner), ("done", "Only One"))
+
 
 class MockModTests(unittest.TestCase):
     def setUp(self):
@@ -653,6 +704,77 @@ class MockModTests(unittest.TestCase):
                     self.assertEqual(r.status_code, 200, r.text)
             self.assertEqual(plugin._s()["rotate_after_deals"], 2)
             self.assertTrue(plugin._s()["alerts_in_game"])
+            await mgr.stop_all()
+
+        asyncio.run(go())
+
+    def test_chat_names_new_mix(self):
+        """The naming screen's "Let chat name it" button: ideas with !mixname, votes with !1 !2, the
+        mod gets the ranked names, the overlays get a poll-style board; the streamer can stop it."""
+        async def go():
+            self.cfg["twitch"]["enabled"] = True          # chat lines go to enabled platforms
+            self.cfg["schedule1"]["mix_options"] = 3
+            mgr, plugin, replies, _store = await self.started()
+            boards: list[dict] = []
+
+            async def broadcast(packet):
+                boards.append(packet)
+            plugin.ctx.broadcast = broadcast
+            zack = ChatUser(platform=Platform.TWITCH, id="1", username="zackfan99", display_name="ZackFan99")
+            bea = ChatUser(platform=Platform.TWITCH, id="2", username="bea", display_name="Bea")
+            await plugin.tick()                          # first contact: learn the mod's boot id
+
+            r = await plugin.execute(self.req(zack, "!mixname Blue Dream"))
+            self.assertIn("no new mix", r["reply"])
+            self.world.mix_button()
+            await plugin.tick()
+            self.assertTrue(any("Suggest a name with !mixname" in t for t in replies), replies)
+            self.assertEqual(self.world.mixvotes[-1]["state"], "suggest")
+            await plugin.execute(self.req(zack, "!mixname blue dream"))
+            await plugin.execute(self.req(bea, "!mixname Blue Dream"))
+            r = await plugin.execute(self.req(bea, "!mixname OG Kush"))
+            self.assertIn("already a product", r["reply"])
+            await plugin.tick()
+            self.assertEqual(self.world.mixvotes[-1]["options"][0], {"name": "Blue Dream", "votes": 2})
+
+            # ideas time over -> vote
+            plugin.mix.ends_at = 0
+            await plugin.tick()
+            self.assertEqual(self.world.mixvotes[-1]["state"], "vote")
+            self.assertEqual([o["name"] for o in self.world.mixvotes[-1]["options"]],
+                             ["Blue Dream", "Hazy Kush", "Cosmic Dream"])
+            self.assertTrue(any("!1 Blue Dream" in t for t in replies), replies)
+            await plugin._on_chat(ChatEvent(platform=Platform.TWITCH, user=zack, message="!2"))
+            await plugin._on_chat(ChatEvent(platform=Platform.TWITCH, user=bea, message="!vote 2"))
+            await plugin._on_chat(ChatEvent(platform=Platform.TWITCH, user=bea, message="!2 lol"))   # not a vote
+            plugin.mix.ends_at = 0
+            await plugin.tick()
+            done = self.world.mixvotes[-1]
+            self.assertEqual(done["state"], "done")
+            self.assertEqual(done["winner"], "Hazy Kush")
+            self.assertTrue(done["confirm"])
+            self.assertIn("Hazy Kush", self.world.products)
+            self.assertIn("🧪 Chat named the new mix: Hazy Kush (2 votes)!", replies)
+            self.assertIsNone(plugin.mix)
+            self.assertEqual(boards[-1]["type"], "board")
+            self.assertEqual(boards[-1]["data"]["state"], "closed")
+            plugin._mix_clear_at = 1                     # board hold over
+            await plugin.tick()
+            self.assertEqual(boards[-1], {"type": "board_clear", "data": {"id": "schedule1_mix"}})
+
+            # stopped from the game
+            self.world.mix_button()
+            await plugin.tick()
+            self.world.mix_stop("closed")
+            await plugin.tick()
+            self.assertEqual(self.world.mixvotes[-1]["state"], "stopped")
+            self.assertIn("🧪 Mix name vote over: the streamer closed the naming screen.", replies)
+
+            # turned off in Core: the mod is told why
+            self.cfg["schedule1"]["mix_vote_enabled"] = False
+            self.world.mix_button()
+            await plugin.tick()
+            self.assertEqual(self.world.mixvotes[-1]["state"], "off")
             await mgr.stop_all()
 
         asyncio.run(go())

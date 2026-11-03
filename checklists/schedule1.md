@@ -37,6 +37,11 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
       chatters while someone waits; keeps their deals / spent. New `people` columns go in SCHEMA and ADDED_COLUMNS.
 - [ ] Stream alerts in the game are phone pop-ups (NotificationsManager), never text messages (conversations are saved).
       `alerts_in_game` default **false**; hidden / red-flagged chatters never appear in alerts either.
+- [ ] Mix names (`mixvote.py`, `mod/MixNamer.cs`): only starts when the streamer presses "Let chat name it"; the
+      streamer can always stop it (button again, own name + Confirm, Esc). Chat ideas are cleaned to letters /
+      numbers / spaces / `' & . -`, taken names and `mix_blocked_words` refused, hidden / red-flagged chatters'
+      ideas ignored. The mod only uses names the game itself accepts (its Confirm button lit). State names
+      `off` / `suggest` / `vote` / `done` / `stopped` match in mixvote.py, MixNamer.cs and the mock.
 - [ ] Game objects only touched on the main thread (`Core.OnUpdate`); the HTTP thread only uses `Shared`.
 - [ ] Every game call in `CustomerWatcher` sits in try/catch: a game update gives log warnings, not a crash.
 - [ ] `START Schedule1 Mock.bat` / `fridge-schedule1/START Mock.bat` run without the game.
@@ -65,6 +70,9 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] Chat app fits the phone screen in landscape: tabs visible, rows not cut off left or right, buttons inside.
 - [ ] Regulars: `FridgeRegulars` loads, "N customers found" grows by 10, each Regular walks between home and its
       hangouts (not standing at the Northtown fallback spot), can be approached for a sample, and takes a chatter name.
+- [ ] New mix naming screen shows **Let chat name it** under Confirm (same look); pressing it gives a chat line, the
+      countdown and ideas under the button, then the vote; the winner is typed in and confirmed (or only typed in
+      with `mix_auto_confirm` off). Pressing it again / Esc / own name stops it and chat hears so.
 - [ ] Co-op with two players: the guest sees the host's chatter names and Chat app lists; a guest chatter's
       `!customer` gets a customer; a guest chatter's `!mug` hits the guest's player. Note whether order / deal
       lines fire on the guest, the host, or both.

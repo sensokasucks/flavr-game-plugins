@@ -20,6 +20,11 @@
 //   POST /nudge                {"npc"}: a newly named, met customer texts an order (host only; plugin.py
 //                              setting nudge_new); answered by event "nudge_result" {"npc", "ok", "msg"}
 //   POST /find                 {"npc", "by"}: mark that customer on this player's phone map, label "by"
+//   POST /mixvote              {"state", "ends_in", "options": [{"name", "votes"}], "winner", "ranked",
+//                              "confirm", "msg"}: chat's vote on a new mix's name (MixNamer.cs); allowed on
+//                              a co-op client too, each player names their own mixes -> {"success"}
+//   (events "mix_vote" {"game_names", "taken", "effects", "value", "current"} and "mix_vote_stop"
+//    {"reason": "button" | "closed"} come from the naming screen's "Let chat name it" button)
 //   GET /customers also says "role" ("host" / "client") and "board" (the lists, the host's on a client);
 //   each customer has "status" (locked / deal / offer / dealer / waiting) and "status_text" (words).
 //   On a client, POST /names and /board answer 409: the host decides.
@@ -231,6 +236,43 @@ namespace FridgeSchedule1
                         waiting = Rows(root, "waiting"),
                         top = Rows(root, "top"),
                     });
+                }
+                catch (Exception ex)
+                {
+                    Json(ctx, 400, Error("bad body: " + ex.Message));
+                    return;
+                }
+                Json(ctx, 200, new Dictionary<string, object> { ["success"] = true });
+                return;
+            }
+
+            if (req.HttpMethod == "POST" && path == "/mixvote")
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(ReadBody(req));
+                    var o = doc.RootElement;
+                    // field names: plugins/schedule1/mixvote.py mod_state()
+                    var s = new MixState
+                    {
+                        state = Str(o, "state"),
+                        msg = Str(o, "msg"),
+                        endsIn = o.TryGetProperty("ends_in", out var e) && e.ValueKind == JsonValueKind.Number ? e.GetInt32() : 0,
+                        confirm = o.TryGetProperty("confirm", out var c) && c.ValueKind == JsonValueKind.True,
+                    };
+                    if (o.TryGetProperty("options", out var opts) && opts.ValueKind == JsonValueKind.Array)
+                        foreach (var r in opts.EnumerateArray())
+                            if (r.ValueKind == JsonValueKind.Object)
+                                s.options.Add(new MixOption
+                                {
+                                    name = Str(r, "name"),
+                                    votes = r.TryGetProperty("votes", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0,
+                                });
+                    if (o.TryGetProperty("ranked", out var ranked) && ranked.ValueKind == JsonValueKind.Array)
+                        foreach (var r in ranked.EnumerateArray())
+                            if (r.ValueKind == JsonValueKind.String)
+                                s.ranked.Add(r.GetString() ?? "");
+                    Shared.SetMixState(s);      // MixNamer.Tick picks it up on the main thread
                 }
                 catch (Exception ex)
                 {

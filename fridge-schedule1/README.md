@@ -54,6 +54,25 @@ off, they knocked you out, or they gave up after 3 minutes). One mugging per coo
 If the game can't do it (no save loaded, you're already knocked out or arrested, no goons free) or doesn't
 answer within 30 s, the points go back and chat is told why.
 
+## Chat names your new mixes
+
+When a mixing station makes a mix nobody has made before, the game asks you to name it. The mod adds a
+**Let chat name it** button under the game's Confirm button. Press it and:
+
+1. Chat suggests names for 30 s with `!mixname Blue Dream` (one idea each; the same idea from more chatters
+   counts as more backers). Names keep to letters, numbers, spaces and `' & . -`; names already in your save
+   and words on the **Words never allowed in a name** list are refused.
+2. Chat votes for 30 s with `!1`, `!2` ... (or `!vote 2`) on up to four names: the best-backed ideas, filled up
+   with the game's own ideas (one of the game's is always there unless you switch that off).
+3. The winner goes into the name box and Confirm is pressed for you. With **Name the mix as soon as the vote
+   ends** off, it's only typed in and you press Confirm (or change it).
+
+The countdown, the ideas and the vote show under the button, and on stream as a poll-style board (the same
+place Core's `!poll` shows up). Press the button again, type your own name and press Confirm, or leave with
+Esc, and chat's vote stops. Times, number of names and the other options are in the **Chat names new mixes**
+box on the Schedule I page (Games). The name is a normal product name, so it is saved like any mix you name.
+Works for co-op guests too: each player names their own mixes with their own chat.
+
 ## Co-op: everyone has the mod
 
 Every player in the lobby runs the mod (and their own Stream Core, if they stream). The **host's** game
@@ -198,6 +217,7 @@ and checks `X-Fridge-Token` when a Token is set.
 | `POST /mug` | `{"id", "by", "goons"}`: !mug; answered by events `mug_result` (`mug`, `ok`, `msg`) and later `mug_outcome` (`mug`, `outcome`: `won` / `lost` / `left`) |
 | `POST /nudge` | `{"npc"}`: newly named, met customer texts an order (host only); answered by event `nudge_result` (`npc`, `ok`, `msg`) |
 | `POST /find` | `{"npc", "by"}`: map marker on that customer for this player, labelled `by` |
+| `POST /mixvote` | `{"state", "ends_in", "options": [{"name", "votes"}], "winner", "ranked", "confirm", "msg"}`: chat's vote on a new mix's name (`off` / `suggest` / `vote` / `done` / `stopped`); the naming screen's button sends events `mix_vote` (`game_names`, `taken`, `effects`, `value`, `current`) and `mix_vote_stop` (`reason`: `button` / `closed`) |
 | `POST /remote` | `{"type": "join" / "leave", "platform", "user_id", "username", "display_name", "is_sub"}`: co-op guest only, passed to the host (whose Core gets `remote_join` / `remote_leave` events) |
 
 `GET /customers` also has `role` (`host`, or `client` when this game is a guest in a friend's lobby) and
@@ -208,4 +228,4 @@ Co-op data between the mods travels as Steam lobby data (`fs1.names`, `fs1.board
 `boot` changes every time the game starts (event numbers start again at 1).
 Code: `mod/Core.cs` (start, main-thread loop), `mod/CustomerWatcher.cs` (game side), `mod/BridgeServer.cs` (HTTP),
 `mod/Shared.cs` (what the two threads share), `mod/ChatApp.cs` (the phone app), `mod/Mugger.cs` (!mug),
-`mod/LobbySync.cs` (co-op sharing).
+`mod/LobbySync.cs` (co-op sharing), `mod/MixNamer.cs` (the naming screen's "Let chat name it" button).

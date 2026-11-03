@@ -15,6 +15,7 @@
 //   CustomerStatus.cs  when a customer will turn up (status words), the order nudge, the Find marker
 //   ImageCache.cs      alert pictures for the Alerts tab, downloaded once
 //   LobbySync.cs       co-op: the host shares names / lists, clients forward joins and mugs
+//   MixNamer.cs        "Let chat name it" button on the new mix naming screen (chat votes the name)
 //
 // Unity and game objects may only be used on the main thread, so the HTTP thread only reads and
 // writes Shared; OnUpdate below moves data between Shared and the game.
@@ -22,7 +23,7 @@
 using System;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.6.0", "sensokasucks",
+[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.7.0", "sensokasucks",
     "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
@@ -42,6 +43,7 @@ namespace FridgeSchedule1
         private CustomerWatcher _watcher;
         private Mugger _mugger;
         private LobbySync _lobby;
+        private MixNamer _mixNamer;
         private bool _inWorld;                // a save is loaded (scene "Main")
         // Order nudges waiting for their pause (real-time seconds), from POST /nudge; RunDueNudges.
         private const float NudgeDelaySec = 8f;
@@ -67,6 +69,7 @@ namespace FridgeSchedule1
             _watcher = new CustomerWatcher(LoggerInstance);
             _mugger = new Mugger(LoggerInstance);
             _lobby = new LobbySync(LoggerInstance, _watcher, _mugger);
+            _mixNamer = new MixNamer(LoggerInstance);
             try
             {
                 _server = new BridgeServer(_bindAddress.Value, _port.Value, _token.Value, LoggerInstance);
@@ -112,6 +115,7 @@ namespace FridgeSchedule1
                 ShowNotice(notice);
             ImageCache.Tick();        // alert pictures that finished downloading
             ChatApp.Current?.Tick();
+            _mixNamer.Tick();         // the naming screen's "Let chat name it" button (every frame: countdown)
 
             if (UnityEngine.Time.realtimeSinceStartup < _nextRefresh)
                 return;

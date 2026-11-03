@@ -34,6 +34,8 @@
     <Reference Include="UnityEngine.UIModule"><HintPath>$(Il2CppDir)\UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
     <!-- ImageConversion.LoadImage for alert pictures, ImageCache.cs -->
     <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(Il2CppDir)\UnityEngine.ImageConversionModule.dll</HintPath><Private>false</Private></Reference>
+    <!-- TextMeshPro: the game's naming screen texts and buttons, MixNamer.cs -->
+    <Reference Include="Unity.TextMeshPro"><HintPath>$(Il2CppDir)\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(Il2CppDir)\UnityEngine.TextRenderingModule.dll</HintPath><Private>false</Private></Reference>
     <!-- Steamworks.NET as the game ships it: lobby data for co-op sharing, LobbySync.cs -->
     <Reference Include="Il2Cppcom.rlabrecque.steamworks.net"><HintPath>$(Il2CppDir)\Il2Cppcom.rlabrecque.steamworks.net.dll</HintPath><Private>false</Private></Reference>

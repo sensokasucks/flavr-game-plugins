@@ -88,6 +88,26 @@ namespace FridgeSchedule1
         public string image;     // picture URL (png / jpg), "" = none; fetched by ImageCache.cs
     }
 
+    /// <summary>One name on chat's list for a new mix (POST /mixvote "options"): an idea and how many
+    /// chatters suggested it, or a vote option and its votes.</summary>
+    internal sealed class MixOption
+    {
+        public string name;
+        public int votes;
+    }
+
+    /// <summary>Where chat's vote on a new mix's name is (POST /mixvote, from plugins/schedule1/mixvote.py
+    /// mod_state). Read by MixNamer.cs on the main thread.</summary>
+    internal sealed class MixState
+    {
+        public string state;     // "off" / "suggest" / "vote" / "done" / "stopped"
+        public int endsIn;       // seconds left in this phase ("ends_in")
+        public List<MixOption> options = new List<MixOption>();
+        public List<string> ranked = new List<string>();   // done: best name first, then the rest to try
+        public bool confirm;     // done: press the game's Confirm (Core's mix_auto_confirm setting)
+        public string msg;       // off: why
+    }
+
     /// <summary>One alert kept in the Alerts tab (newest first, MaxAlerts of them).</summary>
     internal sealed class AlertEntry
     {
@@ -135,6 +155,26 @@ namespace FridgeSchedule1
         private const int MaxRequests = 20;    // Core requests waiting for the main thread
         private static string _role = "host";
         private static readonly Queue<CoreRequest> _requests = new Queue<CoreRequest>();
+        // Latest POST /mixvote not yet seen by MixNamer (only the newest matters).
+        private static MixState _mixState;
+
+        /// <summary>HTTP thread (POST /mixvote): replace the vote state MixNamer will read.</summary>
+        public static void SetMixState(MixState s)
+        {
+            lock (Lock)
+                _mixState = s;
+        }
+
+        /// <summary>Main thread (MixNamer.Tick): the newest vote state, or null when none came since.</summary>
+        public static MixState TakeMixState()
+        {
+            lock (Lock)
+            {
+                var s = _mixState;
+                _mixState = null;
+                return s;
+            }
+        }
 
         /// <summary>"host" or "client"; set by LobbySync every second, read by BridgeServer.</summary>
         public static string Role

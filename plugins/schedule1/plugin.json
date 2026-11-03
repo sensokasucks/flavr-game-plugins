@@ -1,7 +1,7 @@
 {
   "id": "schedule1",
   "name": "Schedule I",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "core_api": 2,
   "kind": "python",
   "entry": "plugin:Schedule1Customers",
@@ -35,10 +35,18 @@
     "mug_cooldown_sec": 300,
     "mug_goons": 2,
     "alerts_in_game": false,
-    "alert_kinds": []
+    "alert_kinds": [],
+    "mix_vote_enabled": true,
+    "mix_suggest_sec": 30,
+    "mix_vote_sec": 30,
+    "mix_options": 4,
+    "mix_keep_game_name": true,
+    "mix_auto_confirm": true,
+    "mix_max_len": 24,
+    "mix_blocked_words": []
   },
   "command_group": {
-    "description": "Schedule I customers (!customer, !topcustomers)"
+    "description": "Schedule I customers and mix names (!customer, !topcustomers, !mug, !mixname)"
   },
   "pages": [
     {
@@ -85,6 +93,19 @@
      "help": "Refunded when the game can't do it (no save loaded, you're knocked out, no goons free)."},
     {"key": "mug_cooldown_sec", "page": true, "group": "Mugging", "label": "Cooldown for the whole chat (s)", "type": "number", "min": 0, "step": 30},
     {"key": "mug_goons", "page": true, "group": "Mugging", "label": "Goons per mugging", "type": "number", "min": 1, "max": 4, "step": 1},
+    {"key": "mix_vote_enabled", "page": true, "group": "Chat names new mixes", "label": "'Let chat name it' button on the naming screen", "type": "checkbox",
+     "help": "When you make a new mix, press 'Let chat name it' on the game's naming screen: chat suggests names with !mixname, then votes !1 !2 ... Press the button again (or name it yourself) to stop."},
+    {"key": "mix_suggest_sec", "page": true, "group": "Chat names new mixes", "label": "Time for name ideas (s)", "type": "number", "min": 0, "step": 5,
+     "help": "0 = no ideas from chat: chat votes on the game's own name ideas straight away."},
+    {"key": "mix_vote_sec", "page": true, "group": "Chat names new mixes", "label": "Voting time (s)", "type": "number", "min": 5, "step": 5},
+    {"key": "mix_options", "page": true, "group": "Chat names new mixes", "label": "Names to vote on", "type": "number", "min": 2, "max": 9, "step": 1,
+     "help": "The ideas most chatters suggested go in first; the game's own ideas fill the rest."},
+    {"key": "mix_keep_game_name", "page": true, "group": "Chat names new mixes", "label": "Always include one of the game's names", "type": "checkbox"},
+    {"key": "mix_auto_confirm", "page": true, "group": "Chat names new mixes", "label": "Name the mix as soon as the vote ends", "type": "checkbox",
+     "help": "Off = chat's pick is typed into the name box and you press Confirm yourself (or change it)."},
+    {"key": "mix_max_len", "page": true, "group": "Chat names new mixes", "label": "Longest name (characters)", "type": "number", "min": 3, "max": 40, "step": 1},
+    {"key": "mix_blocked_words", "page": true, "group": "Chat names new mixes", "label": "Words never allowed in a name", "type": "list",
+     "help": "Ideas containing any of these (any case, also inside longer words) are refused."},
     {"key": "sync_sec", "page": true, "group": "Timing", "label": "Check the game's customers every (s)", "type": "number", "min": 2, "step": 1},
     {"key": "poll_sec", "page": true, "group": "Timing", "label": "Check for orders / deals every (s)", "type": "number", "min": 0.5, "step": 0.5}
   ]

@@ -28,5 +28,15 @@
     "handler": "game",
     "cost": 0,
     "examples": ["!topcustomers"]
+  },
+  "mixname": {
+    "aliases": ["namemix"],
+    "permission": "public",
+    "description": "Suggest a name for the streamer's new Schedule I mix while chat is naming it (!mixname Blue Dream)",
+    "args": ["name"],
+    "group": "schedule1",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!mixname Blue Dream"]
   }
 }
