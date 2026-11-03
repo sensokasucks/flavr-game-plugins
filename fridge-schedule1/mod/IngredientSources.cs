@@ -1,11 +1,14 @@
 // Where the ingredient vote looks for ingredients, and where auto-place takes the winner from
-// (MixPicker.cs). Core's setting mixpick_take_from (plugins/schedule1/mixpick.py, sent as "take_from"):
+// (MixPicker.cs). Core's three "Take ingredients from" tick boxes (plugins/schedule1/mixpick.py
+// take_flags, sent as "take": {"inventory", "nearby", "owned"}), any mix of them:
 //
-//   "carried"  the player's own inventory (hotbar + pockets)                         (the default)
-//   "nearby"   the player's inventory, then the shelves / racks / safes in the same property as the
-//              mixing station, then the player's vehicles parked within NearbyMetres of it
-//   "owned"    the player's inventory, then storage at every property the player owns, then every
-//              player-owned vehicle's trunk
+//   inventory  the player's own inventory (hotbar + pockets)                         (the default)
+//   nearby     the shelves / racks / safes in the same property as the mixing station, and the
+//              player's vehicles parked within NearbyMetres of it
+//   owned      storage at every property the player owns, and every player-owned vehicle's trunk
+//
+// The player's inventory always comes first in the list, so auto-place empties pockets before shelves.
+// A slot is listed once even when "nearby" and "owned" both reach it.
 //
 // Storage means PlaceableStorageEntity.StorageEntity (shelves, racks, safes) and LandVehicle.Storage
 // (trunks). Left alone on purpose: employee beds' lockers (BedItem, a PlaceableStorageEntity subclass:
@@ -37,12 +40,59 @@ namespace FridgeSchedule1
         private const float NearbyMetres = 30f;
         private static bool _warned;      // storage warning already logged this run
         private static int _lastCount = -1;
+        private static string _lastWhat = "";
 
-        /// <summary>Item slots to look in, the player's own first. <paramref name="takeFrom"/> is
-        /// "carried", "nearby" or "owned"; anything else (or a co-op guest) means "carried".</summary>
-        public static List<S1ItemSlot> Slots(string takeFrom, S1Station station)
+        /// <summary>Item slots to look in, the player's own first, in the places that are true. Nothing
+        /// true means the inventory; a co-op guest only ever gets the inventory.</summary>
+        public static List<S1ItemSlot> Slots(bool inventory, bool nearby, bool owned, S1Station station)
         {
             var list = new List<S1ItemSlot>();
+            if (Shared.Role == "client" || (!nearby && !owned))
+                inventory = true;
+            if (inventory)
+                AddInventory(list);
+            if (Shared.Role != "client" && (nearby || owned))
+            {
+                try
+                {
+                    var seen = new HashSet<IntPtr>();       // shelves reached both ways, listed once
+                    if (owned)
+                    {
+                        var props = S1Property.OwnedProperties;
+                        for (int i = 0; props != null && i < props.Count; i++)
+                            if (props[i] != null)
+                                AddProperty(list, seen, props[i]);
+                        AddVehicles(list, seen, null);
+                    }
+                    if (nearby)
+                    {
+                        var here = station != null ? station.ParentProperty : null;
+                        if (here != null)
+                            AddProperty(list, seen, here);
+                        AddVehicles(list, seen, station);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // a game update moved storage: the player's inventory still works. Logged once per run.
+                    if (!_warned)
+                        MelonLoader.MelonLogger.Warning("[FridgeSchedule1] can't read storage for the ingredient vote: " + ex.Message);
+                    _warned = true;
+                }
+            }
+            var what = $"{(inventory ? "inventory " : "")}{(nearby ? "nearby " : "")}{(owned ? "owned" : "")}".Trim();
+            if (list.Count != _lastCount || what != _lastWhat)
+            {
+                // one line when the result changes, so a test shows whether storage was found
+                _lastCount = list.Count;
+                _lastWhat = what;
+                MelonLoader.MelonLogger.Msg($"[FridgeSchedule1] ingredient search ({what}): {list.Count} slots");
+            }
+            return list;
+        }
+
+        private static void AddInventory(List<S1ItemSlot> list)
+        {
             try
             {
                 var mine = Il2CppScheduleOne.DevUtilities.PlayerSingleton<S1Inventory>.Instance?.GetAllInventorySlots();
@@ -51,43 +101,10 @@ namespace FridgeSchedule1
                         list.Add(mine[i]);
             }
             catch { /* no inventory yet */ }
-            if (Shared.Role == "client" || (takeFrom != "nearby" && takeFrom != "owned"))
-                return list;
-            try
-            {
-                if (takeFrom == "nearby")
-                {
-                    var here = station != null ? station.ParentProperty : null;
-                    if (here != null)
-                        AddProperty(list, here);
-                }
-                else
-                {
-                    var props = S1Property.OwnedProperties;
-                    for (int i = 0; props != null && i < props.Count; i++)
-                        if (props[i] != null)
-                            AddProperty(list, props[i]);
-                }
-                AddVehicles(list, takeFrom == "nearby" ? station : null);
-            }
-            catch (Exception ex)
-            {
-                // a game update moved storage: the player's inventory still works. Logged once per run.
-                if (!_warned)
-                    MelonLoader.MelonLogger.Warning("[FridgeSchedule1] can't read storage for the ingredient vote: " + ex.Message);
-                _warned = true;
-            }
-            if (list.Count != _lastCount)
-            {
-                // one line when the number changes, so a test shows whether storage was found
-                _lastCount = list.Count;
-                MelonLoader.MelonLogger.Msg($"[FridgeSchedule1] ingredient search ({takeFrom}): {list.Count} slots incl. storage");
-            }
-            return list;
         }
 
         // Every shelf / rack / safe placed in the property (not employee beds).
-        private static void AddProperty(List<S1ItemSlot> list, S1Property prop)
+        private static void AddProperty(List<S1ItemSlot> list, HashSet<IntPtr> seen, S1Property prop)
         {
             var items = prop.BuildableItems;
             for (int i = 0; items != null && i < items.Count; i++)
@@ -95,12 +112,12 @@ namespace FridgeSchedule1
                 var shelf = items[i]?.TryCast<S1Shelf>();
                 if (shelf == null || items[i].TryCast<S1Bed>() != null)
                     continue;
-                AddStorage(list, shelf.StorageEntity);
+                AddStorage(list, seen, shelf.StorageEntity);
             }
         }
 
         // Player-owned vehicles' trunks; only those near <paramref name="near"/> when it's given.
-        private static void AddVehicles(List<S1ItemSlot> list, S1Station near)
+        private static void AddVehicles(List<S1ItemSlot> list, HashSet<IntPtr> seen, S1Station near)
         {
             var cars = Il2CppScheduleOne.DevUtilities.NetworkSingleton<S1Vehicles>.Instance?.PlayerOwnedVehicles;
             for (int i = 0; cars != null && i < cars.Count; i++)
@@ -110,13 +127,15 @@ namespace FridgeSchedule1
                     continue;
                 if (near != null && Vector3.Distance(near.transform.position, car.transform.position) > NearbyMetres)
                     continue;
-                AddStorage(list, car.Storage);
+                AddStorage(list, seen, car.Storage);
             }
         }
 
-        private static void AddStorage(List<S1ItemSlot> list, S1Storage storage)
+        private static void AddStorage(List<S1ItemSlot> list, HashSet<IntPtr> seen, S1Storage storage)
         {
-            var slots = storage != null ? storage.ItemSlots : null;
+            if (storage == null || !seen.Add(storage.Pointer))
+                return;
+            var slots = storage.ItemSlots;
             for (int i = 0; slots != null && i < slots.Count; i++)
                 if (slots[i] != null)
                     list.Add(slots[i]);

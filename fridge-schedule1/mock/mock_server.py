@@ -296,10 +296,9 @@ class World:
         """The streamer pressed "Let chat pick" on a mixing station (fields as MixPicker.cs sends)."""
         with self.lock:
             have = carried if carried is not None else ["Cuke", "Banana", "Gasoline"]
-            # "nearby" / "owned": also in storage near the station / at any owned property (IngredientSources.cs)
+            # "nearby" / "owned": in storage near the station / at any owned property (IngredientSources.cs)
             return self.add_event({"type": "mixpick", "product": product, "carried": have,
-                                   "nearby": have + [x for x in ("Iodine",) if x not in have],
-                                   "owned": have + [x for x in ("Iodine", "Mega Bean") if x not in have],
+                                   "nearby": ["Iodine"], "owned": ["Iodine", "Mega Bean"],
                                    "all": list(INGREDIENTS)})
 
     def mixpick_stop(self) -> dict:

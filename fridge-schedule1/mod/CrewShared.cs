@@ -54,7 +54,8 @@ namespace FridgeSchedule1
         public List<MixOption> options = new List<MixOption>();   // vote: ingredients and their votes
         public string winner;     // done: the ingredient chat picked
         public bool place;        // done: move the winner into the station (Core's mixpick_auto_place)
-        public string takeFrom;   // where from: "carried" / "nearby" / "owned" (Core's mixpick_take_from, "take_from")
+        // done: where to take it from ("take": {"inventory", "nearby", "owned"}, Core's tick boxes)
+        public bool takeInventory = true, takeNearby, takeOwned;
         public string msg;        // off: why
     }
 

@@ -3,7 +3,7 @@ Chat picks the next mixing ingredient: the "Let chat pick" button on Schedule I'
 
 The streamer puts a product in a mixing station and presses "Let chat pick" (fridge-schedule1/mod/
 MixPicker.cs). The mod sends event "mixpick" {"product", "carried": [ingredient names on the player],
-"nearby": [also in storage near the station], "owned": [also in storage at any owned property],
+"nearby": [in storage near the station], "owned": [in storage at any owned property],
 "all": [every mixing ingredient in the game]}. Chat then votes ``!1`` ``!2`` ... for
 ``mixpick_vote_sec`` seconds; the winner shows on the station screen ("Chat picked Gasoline") and the
 streamer puts it in. Nothing is put in for them, so a vote can't waste stock.
@@ -15,11 +15,13 @@ ingredient"): mixpick_enabled, mixpick_vote_sec, mixpick_options (how many ingre
 mixpick_from ("carried" = only ingredients the streamer has on them, falling back to all when they
 carry none; "all" = any ingredient, for when the streamer will go and buy it), mixpick_auto_place (the
 mod moves the winner from the streamer's inventory into the station's ingredient slot; sent as "place"
-with state "done"), mixpick_take_from ("carried" / "nearby" / "owned": where the streamer's
-ingredients are looked for, both for the "carried" vote list and for auto-place; sent as "take_from").
+with state "done"), and three tick boxes for where the streamer's ingredients are looked for, both
+for the "carried" vote list and for auto-place: mixpick_take_inventory (on the streamer),
+mixpick_take_nearby (storage in the station's property + vehicles near it), mixpick_take_owned (storage
+at every owned property + all vehicles). Sent as "take": {"inventory", "nearby", "owned"} (take_flags).
 
 The state goes to the mod with POST /mixpick {"state", "ends_in", "options": [{"name", "votes"}],
-"winner", "place", "take_from", "msg"}; state names ("off", "vote", "done", "stopped") must match MixPicker.cs. Works for a
+"winner", "place", "take", "msg"}; state names ("off", "vote", "done", "stopped") must match MixPicker.cs. Works for a
 co-op guest too: each player picks for their own station.
 """
 
@@ -54,15 +56,32 @@ def pick_options(carried: list[str], every: list[str], source: str, n: int, rand
     return sorted(names, key=str.lower)
 
 
-def have_list(ev: dict, take_from: str) -> list[str]:
-    """The ingredients the streamer has, from the mod's "mixpick" event: "carried" (on them), "nearby"
-    (also storage near the station) or "owned" (also storage at every owned property), per
-    ``mixpick_take_from``. A mod from before 0.8.1 only sends "carried", which is then used."""
-    key = take_from if take_from in ("nearby", "owned") else "carried"
-    got = ev.get(key)
-    if not isinstance(got, list):
-        got = ev.get("carried") or []
-    return [str(x) for x in got]
+def take_flags(s: dict) -> dict[str, bool]:
+    """Which of the three places to look in, from the "Take ingredients from" tick boxes. A config
+    from before the boxes has ``mixpick_take_from`` ("carried" / "nearby" / "owned"); Core fills the
+    boxes with their defaults (inventory only), so while they are still exactly that, the old choice
+    is used. Ticking anything else makes the boxes win. Nothing ticked = the streamer's inventory, so
+    the vote and auto-place always have somewhere to look."""
+    flags = {"inventory": bool(s.get("mixpick_take_inventory", True)),
+             "nearby": bool(s.get("mixpick_take_nearby", False)),
+             "owned": bool(s.get("mixpick_take_owned", False))}
+    old = str(s.get("mixpick_take_from") or "")
+    if flags == {"inventory": True, "nearby": False, "owned": False} and old in ("nearby", "owned"):
+        flags[old] = True
+    if not any(flags.values()):
+        flags["inventory"] = True
+    return flags
+
+
+def have_list(ev: dict, flags: dict[str, bool]) -> list[str]:
+    """The ingredients the streamer has in the ticked places, from the mod's "mixpick" event:
+    "carried" (on them), "nearby" (storage near the station), "owned" (storage at every owned
+    property). Duplicates dropped, first seen kept."""
+    out: list[str] = []
+    for flag, key in (("inventory", "carried"), ("nearby", "nearby"), ("owned", "owned")):
+        if flags.get(flag) and isinstance(ev.get(key), list):
+            out += [str(x) for x in ev[key] if str(x) not in out]
+    return out
 
 
 class MixPick(Feature):
@@ -98,7 +117,7 @@ class MixPick(Feature):
         if self.p.mix is not None and self.p.mix.phase in ("suggest", "vote"):
             await self.p.bridge.mixpick({"state": "off", "msg": "Chat is still naming a mix. Try again after that vote."})
             return
-        opts = pick_options(have_list(ev, str(s.get("mixpick_take_from") or "carried")), [str(x) for x in ev.get("all") or []],
+        opts = pick_options(have_list(ev, take_flags(s)), [str(x) for x in ev.get("all") or []],
                             str(s.get("mixpick_from") or "carried"), int(self.num("mixpick_options", 6, 2)), self.rand)
         if len(opts) < 2:
             await self.p.bridge.mixpick({"state": "off", "msg": "Not enough ingredients to vote on. Carry a few, "
@@ -133,7 +152,7 @@ class MixPick(Feature):
         return {"state": v.phase, "ends_in": max(0, round(v.ends_at - now)),
                 "options": [{"name": o, "votes": c[i]} for i, o in enumerate(v.options)], "winner": v.winner,
                 "place": bool(self.s().get("mixpick_auto_place", False)),
-                "take_from": str(self.s().get("mixpick_take_from") or "carried")}
+                "take": take_flags(self.s())}
 
     def board(self) -> dict:
         b = self.vote.board(self.p._prefix())

@@ -28,7 +28,7 @@ from core.store import Store
 from plugins.schedule1.dealers import dealer_label, kickback_points
 from plugins.schedule1.drops import clean_note, drop_amount
 from plugins.schedule1.feature import alert_dollars, match_name
-from plugins.schedule1.mixpick import have_list, pick_options
+from plugins.schedule1.mixpick import have_list, pick_options, take_flags
 from plugins.schedule1.staff import job_summary, plan_staff, staff_names
 from plugins.schedule1.suppliers import tab_points
 from plugins.schedule1.tests.test_schedule1 import TOKEN, free_port, load_mock
@@ -71,12 +71,17 @@ class HelperTests(unittest.TestCase):
         self.assertEqual(job_summary(Counter({"harvested a plant": 3, "watered a plant": 1})),
                          "harvested a plant x3, watered a plant")
 
-    def test_have_list(self):
-        ev = {"carried": ["Cuke"], "nearby": ["Cuke", "Banana"], "owned": ["Cuke", "Banana", "Iodine"]}
-        self.assertEqual(have_list(ev, "carried"), ["Cuke"])
-        self.assertEqual(have_list(ev, "nearby"), ["Cuke", "Banana"])
-        self.assertEqual(have_list(ev, "owned"), ["Cuke", "Banana", "Iodine"])
-        self.assertEqual(have_list({"carried": ["Cuke"]}, "owned"), ["Cuke"])   # older mod: only "carried"
+    def test_take_flags_and_have_list(self):
+        self.assertEqual(take_flags({}), {"inventory": True, "nearby": False, "owned": False})
+        self.assertEqual(take_flags({"mixpick_take_from": "owned"}), {"inventory": True, "nearby": False, "owned": True})
+        self.assertEqual(take_flags({"mixpick_take_inventory": False, "mixpick_take_nearby": True}),
+                         {"inventory": False, "nearby": True, "owned": False})
+        self.assertEqual(take_flags({"mixpick_take_inventory": False})["inventory"], True)   # nothing ticked
+        ev = {"carried": ["Cuke"], "nearby": ["Banana", "Cuke"], "owned": ["Banana", "Iodine"]}
+        self.assertEqual(have_list(ev, {"inventory": True}), ["Cuke"])
+        self.assertEqual(have_list(ev, {"nearby": True}), ["Banana", "Cuke"])
+        self.assertEqual(have_list(ev, {"inventory": True, "owned": True}), ["Cuke", "Banana", "Iodine"])
+        self.assertEqual(have_list({"carried": ["Cuke"]}, {"inventory": True, "owned": True}), ["Cuke"])
 
     def test_pick_options(self):
         r = random.Random(1)
@@ -266,7 +271,7 @@ class MoreHooksMockTests(unittest.TestCase):
             self.assertIn("🧪 Chat picked Gasoline (2 votes)!", replies)
             self.assertEqual((self.world.mixpicks[-1]["state"], self.world.mixpicks[-1]["winner"]), ("done", "Gasoline"))
             self.assertFalse(self.world.mixpicks[-1]["place"])     # mixpick_auto_place is off by default
-            self.assertEqual(self.world.mixpicks[-1]["take_from"], "carried")
+            self.assertEqual(self.world.mixpicks[-1]["take"], {"inventory": True, "nearby": False, "owned": False})
 
             # switched off: the mod is told why
             self.cfg["schedule1"]["mixpick_enabled"] = False

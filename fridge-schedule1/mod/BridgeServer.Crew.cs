@@ -9,7 +9,7 @@
 //                     was -> {"success"}                                                     (Crew.cs)
 //   POST /drop        {"id", "by", "note", "cash", "label"} -> {"success"}; answer events from Drops.cs
 //   POST /supplier    {"id", "action": "pay" | "deliver", "supplier", "by", "amount", "qty"} -> {"success"}
-//   POST /mixpick     {"state", "ends_in", "options": [{"name", "votes"}], "winner", "place", "take_from", "msg"} (MixPicker.cs)
+//   POST /mixpick     {"state", "ends_in", "options": [{"name", "votes"}], "winner", "place", "take": {"inventory", "nearby", "owned"}, "msg"} (MixPicker.cs)
 // On a co-op client /crewnames, /drop and /supplier answer 409: workers, dealers, drops and debts are
 // the host's. /mixpick works for everyone (each player mixes at their own station).
 // Callers: plugins/schedule1/bridge.py (crew, crew_names, drop, supplier, mixpick); the mock
@@ -114,9 +114,14 @@ namespace FridgeSchedule1
                             endsIn = (int)(Num(o, "ends_in") ?? 0),
                             winner = Str(o, "winner"),
                             place = o.TryGetProperty("place", out var pl) && pl.ValueKind == JsonValueKind.True,
-                            takeFrom = Str(o, "take_from"),
                             msg = Str(o, "msg"),
                         };
+                        if (o.TryGetProperty("take", out var take) && take.ValueKind == JsonValueKind.Object)
+                        {
+                            s.takeInventory = take.TryGetProperty("inventory", out var ti) && ti.ValueKind == JsonValueKind.True;
+                            s.takeNearby = take.TryGetProperty("nearby", out var tn) && tn.ValueKind == JsonValueKind.True;
+                            s.takeOwned = take.TryGetProperty("owned", out var tw) && tw.ValueKind == JsonValueKind.True;
+                        }
                         if (o.TryGetProperty("options", out var opts) && opts.ValueKind == JsonValueKind.Array)
                             foreach (var x in opts.EnumerateArray())
                                 if (x.ValueKind == JsonValueKind.Object)
