@@ -41,7 +41,23 @@ namespace FridgeSchedule1
 
         private static Sprite _icon;
         /// <summary>The app icon, drawn in code (no image file to ship). Also used for alert pop-ups.</summary>
-        internal static Sprite Icon => _icon ??= MakeIcon();
+        /// <remarks>
+        /// Read by S1API when it builds the phone's home screen (IconSprite below), and by Core.cs for
+        /// alert pop-ups. Unity frees textures nothing in the scene points at when a save loads, so
+        /// the cached sprite can be "destroyed" while the C# reference still exists. `_icon == null`
+        /// uses Unity's own check, which also catches a destroyed sprite (`??=` would not), and the
+        /// icon is drawn again. Without this, S1API sees no sprite and falls back to IconFileName,
+        /// logging "[PhoneApp] Icon file not found: ...\Mods" (Sen's log, 2026-11-03).
+        /// </remarks>
+        internal static Sprite Icon
+        {
+            get
+            {
+                if (_icon == null)
+                    _icon = MakeIcon();
+                return _icon;
+            }
+        }
 
         protected override string AppName => "FridgeChatCustomers";
         protected override string AppTitle => "Chat customers";
@@ -423,7 +439,11 @@ namespace FridgeSchedule1
                 }
             }
             tex.Apply();
-            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+            // Keep the icon when Unity clears unused assets on a scene change (see Icon above).
+            tex.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+            sprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            return sprite;
         }
     }
 }
