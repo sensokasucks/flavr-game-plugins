@@ -172,7 +172,7 @@ namespace FridgeSchedule1
         // from the places Core's "Take ingredients from" boxes tick (IngredientSources: the player's
         // inventory first, then storage near the station and / or at every owned property). The game then updates its preview by itself; StationContentsChanged
         // is called as well in case this build doesn't. Never presses Begin. Returns the status words.
-        private string Place(string winner, PickState take)
+        private string Place(string winner, PickState from)
         {
             try
             {
@@ -192,7 +192,7 @@ namespace FridgeSchedule1
                 if (want <= 0)
                     return "It's already in: press Begin.";
                 int moved = 0;
-                var slots = IngredientSources.Slots(take.takeInventory, take.takeNearby, take.takeOwned, station);   // the player's own slots first
+                var slots = IngredientSources.Slots(from.takeInventory, from.takeNearby, from.takeOwned, station);   // the player's own slots first
                 for (int i = 0; i < slots.Count && moved < want; i++)
                 {
                     var slot = slots[i];
@@ -215,7 +215,7 @@ namespace FridgeSchedule1
                 }
                 try { canvas.StationContentsChanged(); } catch { /* the game redraws on its own */ }
                 if (moved == 0)
-                    return !take.takeNearby && !take.takeOwned
+                    return !from.takeNearby && !from.takeOwned
                         ? "You don't carry any: go get some, then press Begin."
                         : "None in your inventory or storage: go get some, then press Begin.";
                 Shared.AddFeed($"Put {moved}x {winner} in the mixing station");
