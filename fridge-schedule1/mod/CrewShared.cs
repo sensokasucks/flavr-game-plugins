@@ -53,6 +53,7 @@ namespace FridgeSchedule1
         public int endsIn;        // vote: seconds left ("ends_in")
         public List<MixOption> options = new List<MixOption>();   // vote: ingredients and their votes
         public string winner;     // done: the ingredient chat picked
+        public bool place;        // done: move the winner into the station (Core's mixpick_auto_place)
         public string msg;        // off: why
     }
 

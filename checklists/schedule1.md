@@ -84,6 +84,8 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
       marker; emptying it gives the "picked up" chat line and the marker goes.
 - [ ] Mixing station: **Let chat pick** sits under Begin; the vote shows under it; the winner line appears;
       pressing again / closing the station stops it.
+      With `mixpick_auto_place` on, the winner moves from the inventory into the ingredient slot (product's
+      quantity, or what's carried), the preview updates, and Begin is NOT pressed.
 - [ ] Suppliers: `!tab albert 500` lowers Albert's debt in the phone; `!supply albert` leaves goods in a drop with a
       marker. Note if the debt change doesn't stick after reload (ChangeDebt reflection).
 - [ ] Dealers: `!sponsor benji 800` shows "Benji (sponsor)"; a deal he finishes gives a sales line and kickback

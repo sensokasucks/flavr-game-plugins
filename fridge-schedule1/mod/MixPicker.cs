@@ -11,8 +11,9 @@
 //      ingredient in the game (ProductManager.ValidMixIngredients).
 //   2. Core (plugins/schedule1/mixpick.py) runs the vote (!1 !2 ...) and keeps sending where it is
 //      (POST /mixpick -> CrewShared.SetPick).
-//   3. State "done": the status text says "Chat picked Gasoline". Nothing is put in for the
-//      streamer, so a vote never uses up stock the streamer didn't mean to use.
+//   3. State "done": the status text says "Chat picked Gasoline". With Core's mixpick_auto_place on
+//      ("place": true) the winner is moved from the player's inventory into the ingredient slot
+//      (Place); otherwise the streamer puts it in. Begin is never pressed for them.
 // Pressing the button again, or closing the screen, sends "mixpick_stop".
 //
 // Callers: Core.OnUpdate calls Tick() every frame. Main thread only (Unity UI). State names ("off",
@@ -154,10 +155,78 @@ namespace FridgeSchedule1
                     break;
                 case "done":
                     _mode = "idle";
-                    _note = $"Chat picked <color=#54E717>{Esc(s.winner)}</color>. Put it in and press Begin.";
                     Shared.AddFeed($"Chat picked {s.winner} for your mix");
+                    var placed = s.place ? Place(s.winner) : "";
+                    _note = $"Chat picked <color=#54E717>{Esc(s.winner)}</color>. " +
+                            (placed.Length > 0 ? placed : "Put it in and press Begin.");
                     break;
             }
+        }
+
+        // Core's mixpick_auto_place: move the winner from the player's inventory into the station's
+        // ingredient slot (MixingStation.MixerSlot), as many as there is product (capped by what fits and
+        // what the player carries). The game then updates its preview by itself; StationContentsChanged
+        // is called as well in case this build doesn't. Never presses Begin. Returns the status words.
+        private string Place(string winner)
+        {
+            try
+            {
+                var canvas = Il2CppScheduleOne.DevUtilities.Singleton<S1Canvas>.Instance;
+                var station = canvas != null ? canvas.Station : null;
+                var mixer = station != null ? station.MixerSlot : null;
+                if (mixer == null)
+                    return "Put it in and press Begin.";
+                var id = IngredientId(winner);
+                if (id == null)
+                    return "Put it in and press Begin.";
+                var inMixer = mixer.ItemInstance;
+                if (inMixer != null && inMixer.Definition != null && inMixer.Definition.ID != id)
+                    return $"Take {Esc(inMixer.Definition.Name)} out first, then put it in.";
+                int product = station.ProductSlot != null ? station.ProductSlot.Quantity : 0;
+                int want = Math.Max(1, product) - mixer.Quantity;
+                if (want <= 0)
+                    return "It's already in: press Begin.";
+                int moved = 0;
+                var slots = Il2CppScheduleOne.DevUtilities.PlayerSingleton<S1Inventory>.Instance?.GetAllInventorySlots();
+                for (int i = 0; slots != null && i < slots.Count && moved < want; i++)
+                {
+                    var slot = slots[i];
+                    var item = slot?.ItemInstance;
+                    if (item == null || item.Definition == null || item.Definition.ID != id || slot.Quantity <= 0)
+                        continue;
+                    int take = Math.Min(want - moved, slot.Quantity);
+                    var copy = item.GetCopy(take);
+                    take = Math.Min(take, mixer.GetCapacityForItem(copy, true));
+                    if (take <= 0)
+                        break;
+                    if (mixer.ItemInstance == null)
+                        mixer.InsertItem(item.GetCopy(take));
+                    else
+                        mixer.ChangeQuantity(take, false);
+                    slot.ChangeQuantity(-take, false);
+                    moved += take;
+                }
+                try { canvas.StationContentsChanged(); } catch { /* the game redraws on its own */ }
+                if (moved == 0)
+                    return "You don't carry any: go get some, then press Begin.";
+                Shared.AddFeed($"Put {moved}x {winner} in the mixing station");
+                return moved < want ? $"Put in the {moved} you carry. Press Begin." : "It's in: press Begin.";
+            }
+            catch (Exception ex)
+            {
+                _log.Warning("couldn't put chat's ingredient in: " + ex.Message);
+                return "Put it in and press Begin.";
+            }
+        }
+
+        // The game id of the mixing ingredient called <paramref name="name"/> (ProductManager.ValidMixIngredients).
+        private static string IngredientId(string name)
+        {
+            var valid = Il2CppScheduleOne.DevUtilities.NetworkSingleton<S1Products>.Instance?.ValidMixIngredients;
+            for (int i = 0; valid != null && i < valid.Count; i++)
+                if (valid[i] != null && string.Equals(valid[i].Name, name, StringComparison.OrdinalIgnoreCase))
+                    return valid[i].ID;
+            return null;
         }
 
         // The product in the station ("" when the slot is empty: chat can still vote ahead).

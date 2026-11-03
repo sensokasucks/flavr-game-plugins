@@ -258,6 +258,7 @@ class MoreHooksMockTests(unittest.TestCase):
             await plugin.tick()
             self.assertIn("🧪 Chat picked Gasoline (2 votes)!", replies)
             self.assertEqual((self.world.mixpicks[-1]["state"], self.world.mixpicks[-1]["winner"]), ("done", "Gasoline"))
+            self.assertFalse(self.world.mixpicks[-1]["place"])     # mixpick_auto_place is off by default
 
             # switched off: the mod is told why
             self.cfg["schedule1"]["mixpick_enabled"] = False

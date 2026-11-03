@@ -12,10 +12,12 @@ the options are the ingredients. That keeps one set of vote rules for both, and 
 overlays looks the same (only its id and title differ). Settings (plugin.json group "Chat picks the
 ingredient"): mixpick_enabled, mixpick_vote_sec, mixpick_options (how many ingredients to vote on),
 mixpick_from ("carried" = only ingredients the streamer has on them, falling back to all when they
-carry none; "all" = any ingredient, for when the streamer will go and buy it).
+carry none; "all" = any ingredient, for when the streamer will go and buy it), mixpick_auto_place (the
+mod moves the winner from the streamer's inventory into the station's ingredient slot; sent as "place"
+with state "done").
 
 The state goes to the mod with POST /mixpick {"state", "ends_in", "options": [{"name", "votes"}],
-"winner", "msg"}; state names ("off", "vote", "done", "stopped") must match MixPicker.cs. Works for a
+"winner", "place", "msg"}; state names ("off", "vote", "done", "stopped") must match MixPicker.cs. Works for a
 co-op guest too: each player picks for their own station.
 """
 
@@ -116,7 +118,8 @@ class MixPick(Feature):
         v = self.vote
         c = v.counts()
         return {"state": v.phase, "ends_in": max(0, round(v.ends_at - now)),
-                "options": [{"name": o, "votes": c[i]} for i, o in enumerate(v.options)], "winner": v.winner}
+                "options": [{"name": o, "votes": c[i]} for i, o in enumerate(v.options)], "winner": v.winner,
+                "place": bool(self.s().get("mixpick_auto_place", False))}
 
     def board(self) -> dict:
         b = self.vote.board(self.p._prefix())

@@ -89,7 +89,8 @@ host's world, so in co-op only the host's chat can use them; the ingredient vote
   hears when you pick it up. `!drop <note>` does the same for points.
 - **Chat picks the next ingredient**. The mixing station gets a **Let chat pick** button under Begin. Chat votes
   `!1` `!2` ... for 30 s on up to six ingredients (the ones you carry, or any); the winner shows on the screen
-  and you put it in yourself, so a vote never uses stock you didn't mean to use.
+  and you put it in yourself. With **Put chat's pick in the station for me** ticked, the mod moves it from your
+  inventory into the station for you (as many as there is product); you still press Begin.
 - **Suppliers** (`!tab albert 500`, `!supply albert`). `!tab` pays part of what you owe a supplier you've met
   (0.2 in-game $ per point; points for more than you owe come back). `!supply` has the supplier leave five of
   their goods at a dead drop "from" the chatter, with a marker. The supplier says so in a pop-up; nothing goes

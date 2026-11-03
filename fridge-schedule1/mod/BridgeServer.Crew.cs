@@ -9,7 +9,7 @@
 //                     was -> {"success"}                                                     (Crew.cs)
 //   POST /drop        {"id", "by", "note", "cash", "label"} -> {"success"}; answer events from Drops.cs
 //   POST /supplier    {"id", "action": "pay" | "deliver", "supplier", "by", "amount", "qty"} -> {"success"}
-//   POST /mixpick     {"state", "ends_in", "options": [{"name", "votes"}], "winner", "msg"} (MixPicker.cs)
+//   POST /mixpick     {"state", "ends_in", "options": [{"name", "votes"}], "winner", "place", "msg"} (MixPicker.cs)
 // On a co-op client /crewnames, /drop and /supplier answer 409: workers, dealers, drops and debts are
 // the host's. /mixpick works for everyone (each player mixes at their own station).
 // Callers: plugins/schedule1/bridge.py (crew, crew_names, drop, supplier, mixpick); the mock
@@ -113,6 +113,7 @@ namespace FridgeSchedule1
                             state = Str(o, "state"),
                             endsIn = (int)(Num(o, "ends_in") ?? 0),
                             winner = Str(o, "winner"),
+                            place = o.TryGetProperty("place", out var pl) && pl.ValueKind == JsonValueKind.True,
                             msg = Str(o, "msg"),
                         };
                         if (o.TryGetProperty("options", out var opts) && opts.ValueKind == JsonValueKind.Array)

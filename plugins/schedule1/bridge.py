@@ -25,7 +25,7 @@ Both answer on ``schedule1.bridge_url`` (default http://127.0.0.1:3857):
                              events "drop_result" {"drop", "ok", "msg", "where"} and later "drop_taken" {"drop"}
   POST /supplier             {"id", "action": "pay" | "deliver", "supplier", "by", "amount", "qty"} (suppliers.py);
                              answered by "supplier_result" {"req", "ok", "msg", "paid", "debt", "where", "what"}
-  POST /mixpick              {"state", "ends_in", "options": [{"name", "votes"}], "winner", "msg"}: chat's
+  POST /mixpick              {"state", "ends_in", "options": [{"name", "votes"}], "winner", "place", "msg"}: chat's
                              ingredient vote for the mixing station screen (mixpick.py; the mod's "mixpick" /
                              "mixpick_stop" events start / stop it)
   (more events: "staff_job" {"id", "job"}; "dealer_sale" {"id", "amount", "deals"}, "dealer_robbed"
