@@ -8,7 +8,10 @@
 //                              (type "app_remove" / "app_swap" carry "key": a button in the phone app)
 //   POST /board                {"named": [...], "waiting": [...], "top": [...]} rows {"key", "name", "platform",
 //                              "customer", "deals", "spent"}: what the phone app lists -> {"success"}
-//   POST /notify               {"title", "text"}: a stream alert to pop up on the phone -> {"success"}
+//   POST /notify               {"title", "text"} + for a stream alert {"kind", "message", "amount", "label",
+//                              "accent", "bg", "text_color", "muted", "bold", "image"} (Stream Core's look,
+//                              plugins/schedule1/alert_style.py): phone pop-up, and kept in the Alerts tab
+//                              when kind is set and not "system" -> {"success"}
 //   POST /mug                  {"id", "by", "goons"}: send goons after this player -> {"success", "role"};
 //                              the answer comes as events "mug_result" {"mug", "ok", "msg"} and later
 //                              "mug_outcome" {"mug", "outcome": "won" | "lost" | "left"}
@@ -243,7 +246,16 @@ namespace FridgeSchedule1
                 try
                 {
                     using var doc = JsonDocument.Parse(ReadBody(req));
-                    var n = new Notice { title = Str(doc.RootElement, "title"), text = Str(doc.RootElement, "text") };
+                    var o = doc.RootElement;
+                    // field names: plugins/schedule1/bridge.py notify() + alert_style.py
+                    var n = new Notice
+                    {
+                        title = Str(o, "title"), text = Str(o, "text"), kind = Str(o, "kind"),
+                        message = Str(o, "message"), amount = Str(o, "amount"), label = Str(o, "label"),
+                        accent = Str(o, "accent"), bg = Str(o, "bg"), textColor = Str(o, "text_color"),
+                        muted = Str(o, "muted"), image = Str(o, "image"),
+                        bold = o.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True,
+                    };
                     if (n.text.Length == 0)
                     {
                         Json(ctx, 400, Error("text is empty"));

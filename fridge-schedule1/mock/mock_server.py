@@ -78,7 +78,8 @@ class World:
         self.seq = 0
         self.pending: list[tuple[float, dict]] = []   # (due time, deal event) for orders in flight
         self.board: dict = {"named": [], "waiting": [], "top": []}   # last POST /board
-        self.notices: list[dict] = []                 # every POST /notify, oldest first
+        self.notices: list[dict] = []                 # every POST /notify, oldest first ({"title", "text"})
+        self.alert_cards: list[dict] = []             # stream alerts as the mod's Alerts tab gets them
         # co-op: "host" like a game hosting / played alone, "client" like a guest in a friend's game
         # (then the board is the host's, set by tests, and /names + /board answer 409 like the real mod)
         self.role = "host"
@@ -138,6 +139,9 @@ class World:
             return 400, {"success": False, "error": "text is empty"}
         with self.lock:
             self.notices.append({"title": str(body.get("title") or ""), "text": text})
+            if body.get("kind") and body.get("kind") != "system":
+                # what the real mod keeps in its Alerts tab: the whole body, look included
+                self.alert_cards.append(dict(body))
         return 200, {"success": True}
 
     def mug(self, body: dict) -> dict:

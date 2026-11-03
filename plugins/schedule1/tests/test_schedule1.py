@@ -107,6 +107,38 @@ class PlanTests(unittest.TestCase):
         # nobody waiting: nobody rotates
         self.assertEqual(plan_rotation([a, b], after_deals=1, after_min=1, now=1000), [])
 
+    def test_alert_style_from_css(self):
+        """alert_style.py maps Stream Core's alert CSS to plain colours: variables, per-kind classes,
+        the custom sheet winning over the built-in one, .name colour, bold; gradients are skipped."""
+        from unittest import mock
+        from plugins.schedule1 import alert_style
+
+        css = """
+        :root { --alert-text: #f4f6fb; --alert-muted: rgba(197, 205, 220, 0.5); --alert-accent-raid: #5ce1ff; }
+        #alert-box.raid-alert { --alert-accent: var(--alert-accent-raid); }
+        /* custom sheet, read later */
+        #alert-box.raid-alert { background: linear-gradient(#000, #111); font-weight: 400; }
+        #alert-box.raid-alert .name { color: #FFAA00; }
+        #alert-box.follower-alert { background-color: #102030; border-color: #abc; }
+        """
+        rules = []
+        for sel, body in alert_style._RULE.findall(alert_style._COMMENT.sub("", css)):
+            decls = dict((k.strip().lower(), v.strip()) for k, v in (p.split(":", 1) for p in body.split(";") if ":" in p))
+            rules.append(([s.strip() for s in sel.split(",")], decls))
+        settings = {"skin": "classic", "media": {"follow": "/overlay/assets/alerts/follow.png"}}
+        with mock.patch.object(alert_style, "_rules", return_value=rules), \
+                mock.patch.object(alert_style.core_alerts, "read_alert_settings", return_value=settings):
+            raid = alert_style.style_for("raid", {}, "http://127.0.0.1:3850")
+            follow = alert_style.style_for("follow", {}, "http://127.0.0.1:3850")
+        self.assertEqual(raid["accent"], "#5CE1FFFF")
+        self.assertEqual(raid["text"], "#FFAA00FF")          # .name colour
+        self.assertEqual(raid["muted"], "#C5CDDC80")
+        self.assertEqual(raid["bg"], "")                      # gradient: not a plain colour
+        self.assertFalse(raid["bold"])
+        self.assertEqual((follow["bg"], follow["accent"]), ("#102030FF", "#AABBCCFF"))
+        self.assertEqual(follow["image"], "http://127.0.0.1:3850/overlay/assets/alerts/follow.png")
+        self.assertEqual(follow["label"], "Follow")
+
     def test_desired_names_only_for_customers_in_game(self):
         people = [self.person("t:1", 1, npc="b_met", name="zackfan99"),
                   self.person("t:2", 2, npc="gone_npc", name="other")]
@@ -490,6 +522,13 @@ class MockModTests(unittest.TestCase):
             self.assertEqual(len(self.world.notices), 2)
             await plugin._on_alert(build_alert(kind="raid", username="bigstreamer", platform="twitch", viewers=50))
             self.assertEqual(self.world.notices[-1]["text"], "bigstreamer raided with 50 viewers!")
+
+            # the Alerts tab gets Stream Core's look with every alert
+            card = self.world.alert_cards[-1]
+            self.assertEqual((card["kind"], card["label"]), ("raid", "Raid"))
+            for key in ("accent", "text_color", "muted"):
+                self.assertRegex(card[key], r"^#[0-9A-F]{8}$", key)
+            self.assertNotIn("Nobody", " ".join(c["text"] for c in self.world.alert_cards))
             await mgr.stop_all()
 
         asyncio.run(go())

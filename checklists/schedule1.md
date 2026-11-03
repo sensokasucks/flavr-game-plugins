@@ -28,6 +28,9 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
       `fridge_regular_01`..`10` are save data: never rename. Save names stay neutral ("Regular N"). README warns that
       a save that met them needs the DLL, and co-op players need it too. `regulars_only` (default **false**) names
       only customers with `"regular": true` (mod: id prefix `fridge_regular_`, mock likewise).
+- [ ] Alerts tab: the look comes from Core's alert CSS via `plugins/schedule1/alert_style.py` (the mod never parses
+      CSS); `/notify` fields match in bridge.py, BridgeServer.cs and the mock. Alerts are never shared in co-op.
+      Viewer text is escaped before it goes into rich text (no `<b>` from chat).
 - [ ] Chat app layout uses anchors only (fractions of the app area, safe margin for the bezel), no fixed pixel
       widths; rows stretch to the list width.
 - [ ] Shift rotation (`rotate_after_deals`, `rotate_after_min`, `rotate_keep_subs`) defaults off; only moves
@@ -57,6 +60,8 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] A newly named met customer texts an order within ~10 s and chat says "just texted the streamer"; the
       status column / phone list change from "next order expected ..." to "texted you an order" to "deal set for ...".
       Find puts a marker on the phone map that follows the customer and stays until Stop, arrival (5 m) or FindMinutes.
+- [ ] A test alert from Core's Alerts page pops up and lands in the Alerts tab with the kind's colour, an unread
+      dot and "Alerts (1)"; tapping it or Mark all read clears the dot; a picked PNG / JPG shows on the card.
 - [ ] Chat app fits the phone screen in landscape: tabs visible, rows not cut off left or right, buttons inside.
 - [ ] Regulars: `FridgeRegulars` loads, "N customers found" grows by 10, each Regular walks between home and its
       hangouts (not standing at the Northtown fallback spot), can be approached for a sample, and takes a chatter name.

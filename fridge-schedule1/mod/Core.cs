@@ -13,6 +13,7 @@
 //   ChatApp.cs         the "Chat" phone app (customers, waiting list, top spenders, feed)
 //   Mugger.cs          !mug: cartel goons sent after a player (host only)
 //   CustomerStatus.cs  when a customer will turn up (status words), the order nudge, the Find marker
+//   ImageCache.cs      alert pictures for the Alerts tab, downloaded once
 //   LobbySync.cs       co-op: the host shares names / lists, clients forward joins and mugs
 //
 // Unity and game objects may only be used on the main thread, so the HTTP thread only reads and
@@ -21,7 +22,7 @@
 using System;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.5.0", "sensokasucks",
+[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.6.0", "sensokasucks",
     "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
@@ -109,6 +110,7 @@ namespace FridgeSchedule1
             var notice = Shared.TakeNotice();
             if (notice != null)
                 ShowNotice(notice);
+            ImageCache.Tick();        // alert pictures that finished downloading
             ChatApp.Current?.Tick();
 
             if (UnityEngine.Time.realtimeSinceStartup < _nextRefresh)
@@ -185,14 +187,19 @@ namespace FridgeSchedule1
             Shared.AddFeed(why.Length == 0 ? $"{r.by} sent goons after you" : $"{r.by} tried to mug you: {why}");
         }
 
-        // A stream alert as the game's own phone pop-up (top right, like "new message") plus a line in
-        // the Chat app's feed. Pop-ups aren't saved, so chatter names never reach the save file (which
+        // A stream alert as the game's own phone pop-up (top right, like "new message") plus a card in
+        // the Chat app's Alerts tab (a plain note goes to the Feed). Pop-ups aren't saved, so chatter names never reach the save file (which
         // is why alerts are not sent as text messages: conversations are saved). On the main menu
         // there is no NotificationsManager; the alert then only goes to the feed.
         private void ShowNotice(Notice n)
         {
             var title = string.IsNullOrEmpty(n.title) ? "Stream" : n.title;
-            Shared.AddFeed(n.text);
+            // Stream alerts stay in the Chat app's Alerts tab (with Stream Core's look) so the streamer
+            // can read them after the pop-up has gone; other notes go to the Feed as before.
+            if (!string.IsNullOrEmpty(n.kind) && n.kind != "system")
+                Shared.AddAlert(n);
+            else
+                Shared.AddFeed(n.text);
             try
             {
                 var manager = Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.UI.NotificationsManager>.Instance;

@@ -8,7 +8,8 @@ Both answer on ``schedule1.bridge_url`` (default http://127.0.0.1:3857):
   GET  /events?after=<seq>   {"boot", "last", "events": [{"seq", "type", "id", ...}]}
                              (type "app_remove" / "app_swap" with "key": buttons in the phone app)
   POST /board                {"named", "waiting", "top"}: lists for the in-game phone app (plugin.board())
-  POST /notify               {"title", "text"}: a stream alert to pop up on the in-game phone
+  POST /notify               {"title", "text", "kind", "message", "label", "accent", "bg", "text_color"...}:
+                             a stream alert for the phone (pop-up + Alerts tab); no kind = Feed note
   POST /mug                  {"id", "by", "goons"}: !mug; answers arrive as mug_result / mug_outcome events
   POST /remote               {"type": "join" | "leave", chatter fields}: co-op client -> host's list
   POST /nudge                {"npc"}: newly named customer texts an order (nudge_result event)
@@ -99,6 +100,10 @@ class Bridge:
         """Mark that customer on the streamer's in-game phone map (page Find button)."""
         return await self._call("POST", "/find", json={"npc": npc_id, "by": label})
 
-    async def notify(self, title: str, text: str) -> dict:
-        """Pop a stream alert up on the in-game phone (plugin.py _on_alert)."""
-        return await self._call("POST", "/notify", json={"title": title, "text": text})
+    async def notify(self, title: str, text: str, **alert) -> dict:
+        """Pop something up on the in-game phone. A stream alert (plugin.py _on_alert) also passes
+        ``kind`` (core.alerts kind), ``message`` (the viewer's own words) and its look from
+        alert_style.style_for: ``label``, ``accent``, ``bg``, ``text``, ``muted`` ("#RRGGBBAA"),
+        ``bold``, ``image`` (URL); the mod keeps those in its Alerts tab. Without ``kind`` (or with
+        "system") it's a plain note for the Feed. Field names match BridgeServer.cs /notify."""
+        return await self._call("POST", "/notify", json={"title": title, "text": text, **alert})

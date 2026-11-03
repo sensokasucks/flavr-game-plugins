@@ -30,6 +30,7 @@ from core.avatar_store import parse_hide
 from core.models import ExecuteRequest, Platform
 from core.plugin_api import BasePlugin
 
+from .alert_style import style_for
 from .bridge import Bridge, BridgeError
 from .roster import Roster, clean_name, desired_names, person_key, plan_assignments, plan_rotation
 
@@ -594,7 +595,15 @@ class Schedule1Customers(BasePlugin):
             own = f"{cust.get('first', '')} {cust.get('last', '')}".strip()
             text = f"{text} (your customer {own})"
         try:
-            await self.bridge.notify(str(payload.get("title") or "Stream alert"), text)
+            # The Alerts tab keeps it with Stream Core's look (alert_style.py: colours from the alert CSS,
+            # the kind's label and picture), so the streamer can read it after the pop-up is gone.
+            look = style_for(kind, payload, self.ctx.core_url() if self.ctx else "http://127.0.0.1:3850")
+            message = str(payload.get("message") or "").strip()      # hidden chatters returned above
+            await self.bridge.notify(str(payload.get("title") or "Stream alert"), text, kind=kind,
+                                     message=message[:300], amount=str(payload.get("amount_fmt") or ""),
+                                     label=look["label"], accent=look["accent"], bg=look["bg"],
+                                     text_color=look["text"], muted=look["muted"], bold=look["bold"],
+                                     image=look["image"])
         except BridgeError as exc:
             log.info("Schedule I: alert not shown in the game: %s", exc)
 

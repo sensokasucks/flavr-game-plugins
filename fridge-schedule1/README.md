@@ -117,6 +117,16 @@ The mod adds a **Chat** app (purple speech bubble) to the in-game phone:
 - **Top**: the five chatter-customers who spent the most.
 - **Feed**: chatter-customers' orders and deals, and stream alerts.
 
+**Alerts tab**: every stream alert also stays in the Chat app's **Alerts** tab (last 50, newest on top) so you
+can read it after the pop-up is gone. Unread ones have a dot and the tab says "Alerts (3)"; tap a card or
+**Mark all read**. Cards use Stream Core's alert look: `plugins/schedule1/alert_style.py` reads Core's
+`overlay/alerts.css` and your `alerts-custom.css` (Admin → Alert test) and maps the accent per kind
+(`--alert-accent`, `border-color`), the text colour (`color`, `.name { color }`), a plain `background-color`,
+`font-weight` and `--alert-muted` (the viewer's message); the "card" skin uses `--alert-card-bg`. Fonts,
+sizes, gradients, shadows and animations can't be shown in the game and are left out. The kind's picture from
+Core's alert page (PNG / JPG; GIFs and videos aren't shown) or the sticker / gift image sits on the card.
+Sounds are not played (the game's pop-up already makes its own). Alerts stay each player's own in co-op.
+
 **Stream alerts on the phone**: tick **Show stream alerts on the in-game phone** on Core's Schedule I card.
 Follows, subs, raids, tips and the rest pop up like a phone notification and go into the feed. If the
 person has a customer, it says which one. **Which alerts** picks kinds (empty = all except chat flags).
@@ -184,7 +194,7 @@ and checks `X-Fridge-Token` when a Token is set.
 | `POST /names` | `{"names": {"kyle_cooley": {"first": "zackfan99", "last": ""}}}`, the full set: customers not listed get their own name back |
 | `GET /events?after=N` | `{"boot", "last", "events": [...]}`; `type` is `contract` (order texted), `deal` (went through) or `unlocked` (met someone new), with `id`, `name`, `qty`, `products`, `payment`; or `app_remove` / `app_swap` with `key` (phone app buttons) |
 | `POST /board` | `{"named", "waiting", "top"}`, rows `{"key", "name", "platform", "customer", "deals", "spent"}`: what the phone app lists |
-| `POST /notify` | `{"title", "text"}`: a stream alert to pop up on the phone |
+| `POST /notify` | `{"title", "text"}` plus, for a stream alert, `kind`, `message`, `amount`, `label`, `accent`, `bg`, `text_color`, `muted` (`#RRGGBBAA`), `bold`, `image`: pop-up, and a card in the Alerts tab (no `kind` or `system` = Feed note) |
 | `POST /mug` | `{"id", "by", "goons"}`: !mug; answered by events `mug_result` (`mug`, `ok`, `msg`) and later `mug_outcome` (`mug`, `outcome`: `won` / `lost` / `left`) |
 | `POST /nudge` | `{"npc"}`: newly named, met customer texts an order (host only); answered by event `nudge_result` (`npc`, `ok`, `msg`) |
 | `POST /find` | `{"npc", "by"}`: map marker on that customer for this player, labelled `by` |

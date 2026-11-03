@@ -74,6 +74,27 @@ namespace FridgeSchedule1
     {
         public string title;     // "New subscriber"
         public string text;      // "zackfan99 subscribed!"
+        // A stream alert (kind set, not "system") also goes into the Chat app's Alerts tab, drawn with
+        // Stream Core's look as plugins/schedule1/alert_style.py resolved it. Colours "#RRGGBBAA".
+        public string kind;      // core.alerts kind ("subscribe", "raid", ...); "" / "system" = a plain Feed note
+        public string message;   // the viewer's own words (Super Chat, tip message), may be ""
+        public string amount;    // "$5.00", "500 bits", may be ""
+        public string label;     // the kind's name ("Gifted sub")
+        public string accent;    // label, side bar, unread dot
+        public string bg;        // card background; "" = the app's row colour
+        public string textColor; // headline ("text_color" in JSON)
+        public string muted;     // the viewer's message
+        public bool bold;        // headline in bold
+        public string image;     // picture URL (png / jpg), "" = none; fetched by ImageCache.cs
+    }
+
+    /// <summary>One alert kept in the Alerts tab (newest first, MaxAlerts of them).</summary>
+    internal sealed class AlertEntry
+    {
+        public int id;
+        public Notice n;
+        public DateTime at;
+        public bool read;
     }
 
     internal static class Shared
@@ -102,6 +123,12 @@ namespace FridgeSchedule1
         private static readonly List<string> _feed = new List<string>();
         private static int _feedVersion;
         private static readonly Queue<Notice> _notices = new Queue<Notice>();
+        // Alerts tab (ChatApp). Only touched from the main thread (Core.ShowNotice, ChatApp), but kept
+        // here with the rest under the same lock. Each player's own: never shared through LobbySync.
+        private const int MaxAlerts = 50;
+        private static readonly List<AlertEntry> _alerts = new List<AlertEntry>();
+        private static int _alertSeq;
+        private static int _alertsVersion;
 
         // Co-op (LobbySync.cs). Role is "host" (also when playing alone) or "client"; on a client the
         // host's mod decides the names and the list, and this player's Core only forwards requests.
@@ -247,6 +274,37 @@ namespace FridgeSchedule1
             {
                 if (_notices.Count < MaxNotices)
                     _notices.Enqueue(n);
+            }
+        }
+
+        /// <summary>Main thread (Core.ShowNotice): keep a stream alert for the Alerts tab, unread.</summary>
+        public static void AddAlert(Notice n)
+        {
+            lock (Lock)
+            {
+                _alerts.Insert(0, new AlertEntry { id = ++_alertSeq, n = n, at = DateTime.Now });
+                if (_alerts.Count > MaxAlerts)
+                    _alerts.RemoveRange(MaxAlerts, _alerts.Count - MaxAlerts);
+                _alertsVersion++;
+            }
+        }
+
+        /// <summary>Main thread (ChatApp): the kept alerts (newest first), how many are unread, and a version.</summary>
+        public static (List<AlertEntry> alerts, int unread, int version) GetAlerts()
+        {
+            lock (Lock)
+                return (new List<AlertEntry>(_alerts), _alerts.FindAll(a => !a.read).Count, _alertsVersion);
+        }
+
+        /// <summary>Main thread (ChatApp): tapping a card marks it read; id 0 marks them all.</summary>
+        public static void MarkAlertsRead(int id)
+        {
+            lock (Lock)
+            {
+                foreach (var a in _alerts)
+                    if (id == 0 || a.id == id)
+                        a.read = true;
+                _alertsVersion++;
             }
         }
 

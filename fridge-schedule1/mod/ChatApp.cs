@@ -25,7 +25,8 @@ namespace FridgeSchedule1
 {
     public class ChatApp : PhoneApp
     {
-        private static readonly string[] Tabs = { "Customers", "Waiting", "Top", "Feed" };
+        // Tab order = the _tab numbers used in Tick / Rebuild (0 Customers .. 4 Alerts).
+        private static readonly string[] Tabs = { "Customers", "Waiting", "Top", "Feed", "Alerts" };
         private const float SafeMargin = 0.035f;   // fraction of the app area kept clear on every side (bezel)
         private static readonly Color Background = new Color(0.09f, 0.09f, 0.11f);
         private static readonly Color RowColor = new Color(0.16f, 0.16f, 0.2f);
@@ -57,6 +58,9 @@ namespace FridgeSchedule1
         private int _shownBoard = -1;         // Shared versions the list was last built from
         private int _shownFeed = -1;
         private int _shownFind = -1;          // CustomerStatus.FindVersion the Finding bar was drawn for
+        private int _shownAlerts = -1;        // Shared alerts version / ImageCache.Version the Alerts tab shows
+        private int _shownPictures = -1;
+        private Text _alertsTabLabel;         // "Alerts (3)"
         private bool _dirty = true;           // tab pressed / Remove asked "Sure?": rebuild next Tick
         private string _confirmKey;           // the row whose Remove was pressed once (press again = remove)
 
@@ -75,9 +79,11 @@ namespace FridgeSchedule1
             for (int i = 0; i < Tabs.Length; i++)
             {
                 int tab = i;
-                var (go, btn, _) = UIFactory.ButtonWithLabel("Tab" + Tabs[i], Tabs[i], panel.transform, TabOff, 0, 0);
+                var (go, btn, label) = UIFactory.ButtonWithLabel("Tab" + Tabs[i], Tabs[i], panel.transform, TabOff, 0, 0);
                 Place(go, i / (float)Tabs.Length + 0.005f, 0.87f, (i + 1) / (float)Tabs.Length - 0.005f, 1f);
                 _tabButtons.Add((go.GetComponent<Image>(), tab));
+                if (Tabs[i] == "Alerts")
+                    _alertsTabLabel = label;     // shows the unread count (Tick)
                 ButtonUtils.AddListener(btn, () => { _tab = tab; _confirmKey = null; _dirty = true; });
             }
 
@@ -109,9 +115,13 @@ namespace FridgeSchedule1
                 return;
             var (board, boardVersion) = Shared.GetBoard();
             var (feed, feedVersion) = Shared.GetFeed();
+            var (alerts, unread, alertsVersion) = Shared.GetAlerts();
+            if (_alertsTabLabel != null)
+                _alertsTabLabel.text = unread > 0 ? $"Alerts ({unread})" : "Alerts";
             bool changed = _dirty
-                || (_tab != 3 && boardVersion != _shownBoard)
+                || (_tab < 3 && boardVersion != _shownBoard)
                 || (_tab == 3 && feedVersion != _shownFeed)
+                || (_tab == 4 && (alertsVersion != _shownAlerts || ImageCache.Version != _shownPictures))
                 || (_tab == 0 && CustomerStatus.FindVersion != _shownFind);
             _shownFind = CustomerStatus.FindVersion;
             if (!changed)
@@ -119,9 +129,11 @@ namespace FridgeSchedule1
             _dirty = false;
             _shownBoard = boardVersion;
             _shownFeed = feedVersion;
+            _shownAlerts = alertsVersion;
+            _shownPictures = ImageCache.Version;
             try
             {
-                Rebuild(board, feed);
+                Rebuild(board, feed, alerts, unread);
             }
             catch (Exception ex)
             {
@@ -129,7 +141,7 @@ namespace FridgeSchedule1
             }
         }
 
-        private void Rebuild(Board board, List<string> feed)
+        private void Rebuild(Board board, List<string> feed, List<AlertEntry> alerts, int unread)
         {
             foreach (var (bg, tab) in _tabButtons)
                 bg.color = tab == _tab ? TabOn : TabOff;
@@ -160,14 +172,90 @@ namespace FridgeSchedule1
                         Line($"{i + 1}. {r.name}   ${r.spent:0}   ({r.deals} deals)");
                     }
                     break;
-                default:
+                case 3:
                     if (feed.Count == 0)
-                        Line("Orders, deals and stream alerts show up here.");
+                        Line("Orders, deals and muggings show up here.");
                     foreach (var l in feed)
                         Line(l);
                     break;
+                default:
+                    if (alerts.Count == 0)
+                        Line("Stream alerts show up here (switch them on: Schedule I page, Settings, Alerts on the phone).");
+                    else
+                        AlertsHeader(unread);
+                    foreach (var a in alerts)
+                        AlertCard(a);
+                    break;
             }
         }
+
+        // "3 unread" with Mark all read.
+        private void AlertsHeader(int unread)
+        {
+            var row = UIFactory.Panel("AlertsHeader", _list, Background);
+            row.AddComponent<LayoutElement>().minHeight = _rowH * 0.6f;
+            Label(row, unread > 0 ? $"{unread} unread" : "All read", Font(), 0f, 0.7f);
+            if (unread == 0)
+                return;
+            var (go, btn, _) = UIFactory.ButtonWithLabel("MarkAll", "Mark all read", row.transform, TabOff, 0, 0);
+            Place(go, 0.72f, 0.12f, 0.985f, 0.88f);
+            ButtonUtils.AddListener(btn, () => { Shared.MarkAlertsRead(0); _dirty = true; });
+            ScaleButtons(row);
+        }
+
+        // One stream alert with Stream Core's look (colours resolved from its alert CSS by
+        // plugins/schedule1/alert_style.py): accent side bar, the kind's picture, "Label · time  amount",
+        // the headline, the viewer's message, and a dot while unread. Tap the card to mark it read.
+        private void AlertCard(AlertEntry a)
+        {
+            var n = a.n;
+            var accent = ParseColour(n.accent, TabOn);
+            var row = UIFactory.Panel("Alert", _list, ParseColour(n.bg, RowColor));
+            row.AddComponent<LayoutElement>().minHeight = _rowH * (string.IsNullOrEmpty(n.message) ? 1f : 1.35f);
+            var btn = row.AddComponent<Button>();
+            btn.targetGraphic = row.GetComponent<Image>();
+            int id = a.id;
+            ButtonUtils.AddListener(btn, () => { Shared.MarkAlertsRead(id); _dirty = true; });
+
+            var bar = UIFactory.Panel("Accent", row.transform, accent);
+            Place(bar, 0f, 0f, 0.012f, 1f);
+
+            float textFrom = 0.02f;
+            var pic = ImageCache.Get(n.image);
+            if (pic != null)
+            {
+                var picGo = new GameObject("Picture");
+                picGo.transform.SetParent(row.transform, false);
+                picGo.AddComponent<RectTransform>();
+                var img = picGo.AddComponent<Image>();
+                img.sprite = pic;
+                img.preserveAspect = true;
+                Place(picGo, 0.02f, 0.08f, 0.13f, 0.92f);
+                textFrom = 0.14f;
+            }
+
+            string Hex(string c, string fallback) => string.IsNullOrEmpty(c) || c.Length < 7 ? fallback : c;
+            var head = string.IsNullOrEmpty(n.label) ? n.title : n.label;
+            var text = $"<color={Hex(n.accent, "#C9A6FFFF")}><b>{Esc(head)}</b>  {a.at:HH:mm}" +
+                       (string.IsNullOrEmpty(n.amount) ? "" : "  " + Esc(n.amount)) + "</color>\n" +
+                       $"<color={Hex(n.textColor, "#F4F6FBFF")}>{(n.bold ? "<b>" : "")}{Esc(n.text)}{(n.bold ? "</b>" : "")}</color>" +
+                       (string.IsNullOrEmpty(n.message) ? "" : $"\n<color={Hex(n.muted, "#C5CDDCFF")}>\"{Esc(n.message)}\"</color>");
+            var t = Label(row, text, Font(), textFrom, a.read ? 0.985f : 0.93f);
+            t.supportRichText = true;
+            if (!a.read)
+            {
+                var dot = UIFactory.Text("Unread", "●", row.transform, Font(), TextAnchor.MiddleCenter);
+                dot.color = accent;
+                Place(dot.gameObject, 0.94f, 0f, 0.985f, 1f);
+            }
+        }
+
+        // "#RRGGBBAA" from Core -> Color; fallback when empty or unreadable.
+        private static Color ParseColour(string hex, Color fallback) =>
+            !string.IsNullOrEmpty(hex) && ColorUtility.TryParseHtmlString(hex, out var c) ? c : fallback;
+
+        // Chat-written text inside rich text: stop "<b>" in a viewer's message from styling the card.
+        private static string Esc(string s) => (s ?? "").Replace("<", "‹").Replace(">", "›");
 
         // One plain text row: wraps inside the row, shrinks a little rather than spilling out.
         private void Line(string text)
@@ -290,7 +378,7 @@ namespace FridgeSchedule1
 
         // Text filling the row between the fractions x0..x1 of its width, left-aligned with a left margin;
         // wraps, and shrinks (down to 11) rather than spill out of the row.
-        private static void Label(GameObject row, string text, int size, float x0, float x1)
+        private static Text Label(GameObject row, string text, int size, float x0, float x1)
         {
             var t = UIFactory.Text("Text", text, row.transform, size, TextAnchor.MiddleLeft);
             t.resizeTextForBestFit = true;
@@ -302,6 +390,7 @@ namespace FridgeSchedule1
             rt.anchorMax = new Vector2(x1, 1f);
             rt.offsetMin = new Vector2(10, 2);
             rt.offsetMax = new Vector2(-6, -2);
+            return t;
         }
 
         // Pin a UI object to fractions of its parent (0..1 on each axis), with no fixed pixel size.

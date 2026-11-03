@@ -1,7 +1,7 @@
 {
   "id": "schedule1",
   "name": "Schedule I",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "core_api": 2,
   "kind": "python",
   "entry": "plugin:Schedule1Customers",
