@@ -88,7 +88,7 @@ if exist "%MODS%" (
   echo Installed into %MODS%
 ) else (
   echo.
-  echo No %MODS% folder found — skip auto-install.
+  echo No %MODS% folder found - skip auto-install.
   echo Manually copy jars\*.jar into your Fabric mods folder.
 )
 
@@ -124,7 +124,7 @@ goto :eof
 
 :fail
 echo.
-echo BUILD FAILED — fix the errors above, then run BUILD.bat again.
+echo BUILD FAILED - fix the errors above, then run BUILD.bat again.
 echo Need JDK 21 and internet on the first run ^(Gradle + Loom downloads^).
 echo If you saw "Unable to access jarfile ... gradle-wrapper.jar", the wrapper
 echo was missing from git. Re-run BUILD.bat on a network so it can download.
