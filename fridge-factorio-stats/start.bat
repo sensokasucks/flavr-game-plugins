@@ -1,5 +1,5 @@
 @echo off
-REM Fridge Factorio Stats – Node bridge + overlay (:3847)
+REM Fridge Factorio Stats - Node bridge + overlay (:3847)
 setlocal EnableExtensions
 cd /d "%~dp0"
 
