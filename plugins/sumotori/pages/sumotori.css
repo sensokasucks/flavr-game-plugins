@@ -1,0 +1,19 @@
+/* Sumotori Dreams page (pages/index.html). Colours come from the dashboard's admin.css. */
+.score { font-size: 1.6rem; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.side-a { color: #ff6b6b; font-weight: 600; }
+.side-b { color: #5ca8ff; font-weight: 600; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.win { min-width: 9em; }
+#bets { width: 100%; border-collapse: collapse; }
+#bets td { padding: 3px 6px; border-bottom: 1px solid var(--border); }
+#queue { margin: 4px 0; padding-left: 1.2em; }
+.file-text { max-height: 360px; overflow: auto; white-space: pre; font-size: 0.85rem; }
+#file-path { word-break: break-all; }
+
+/* Settings tab: one box per field group, side by side when there is room (same as Gamer Stonks). */
+.mc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.mc-grid textarea { width: 100%; font-family: inherit; }
+
+/* admin.css makes .subtabs stick 56px down (under the dashboard's top bar). Inside this frame there is
+   no top bar, so that pushed the tabs over the first box; keep them in place here. */
+#tabs { position: static; }

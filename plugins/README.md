@@ -1,6 +1,6 @@
 # Game plugins
 
-One folder per game: `minecraft/`, `factorio/`, `granvir/`, `openttd/`, `schedule1/`; plus `stonks/` (Gamer Stonks). Each one is a Stream Core
+One folder per game: `minecraft/`, `factorio/`, `granvir/`, `openttd/`, `schedule1/`, `sumotori/`; plus `stonks/` (Gamer Stonks). Each one is a Stream Core
 plugin. Copy the folders you want into Stream Core's `fridge-stream-core/plugins/` folder (so you get
 `fridge-stream-core/plugins/minecraft/plugin.json`), restart Core, then switch the game on under
 **Settings → Game plugins**.

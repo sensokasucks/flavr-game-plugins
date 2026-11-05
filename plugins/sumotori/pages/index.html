@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!-- Sumotori Dreams page, shown in a frame inside the Stream Core dashboard (Live › Games).
+     Script: sumotori.js. Data: ../routes.py (/api/sumotori/...). Round controls first because
+     they are what the streamer presses mid-stream; set-once things are on the Settings tab. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sumotori Dreams</title>
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <link rel="stylesheet" href="sumotori.css" />
+  <script src="/admin/plugin-page.js"></script>
+</head>
+<body>
+<main>
+  <div class="subtabs" id="tabs" role="tablist">
+    <button type="button" class="subtab active" data-sub="round">Round</button>
+    <button type="button" class="subtab" data-sub="arena">Arena file</button>
+    <button type="button" class="subtab" data-sub="settings">Settings</button>
+  </div>
+  <p id="status" class="muted" role="status"></p>
+
+  <!-- Round tab: score, bets, who won. Buttons call POST /api/sumotori/round. -->
+  <section class="sub" data-sub="round">
+    <fieldset class="cfg-card">
+      <legend>Score</legend>
+      <div class="score"><span id="name-a" class="side-a">Red</span> <b id="score-a">0</b>
+        <span class="muted">–</span> <b id="score-b">0</b> <span id="name-b" class="side-b">Blue</span></div>
+      <p class="hint" id="streak"></p>
+      <div class="btn-row">
+        <button type="button" class="primary win" data-round="win_a" id="win-a">Red won</button>
+        <button type="button" class="primary win" data-round="win_b" id="win-b">Blue won</button>
+      </div>
+      <p class="hint">The game can't tell Stream Core who won, so press it here (or on the phone remote) after each round.
+        It pays the bets, counts the win and, if set, loads the next arena.</p>
+    </fieldset>
+
+    <fieldset class="cfg-card">
+      <legend>Bets</legend>
+      <p id="round-line"></p>
+      <div class="btn-row">
+        <button type="button" data-round="open" id="b-open">Open bets</button>
+        <button type="button" data-round="lock" id="b-lock">Close bets</button>
+        <button type="button" data-round="cancel" id="b-cancel">Call off (give points back)</button>
+      </div>
+      <table id="bets"><tbody></tbody></table>
+    </fieldset>
+
+    <fieldset class="cfg-card">
+      <legend id="queue-title">Next arena</legend>
+      <ul id="queue"></ul>
+      <div class="btn-row">
+        <button type="button" class="primary" data-arena="next" id="b-next">Next arena</button>
+        <button type="button" data-arena="clear" id="b-clear">Clear the queue</button>
+        <button type="button" id="b-reset">Reset score</button>
+      </div>
+    </fieldset>
+  </section>
+
+  <!-- Arena file tab: where the file is, how to load it in the game, what's in it now. -->
+  <section class="sub" data-sub="arena" hidden>
+    <fieldset class="cfg-card">
+      <legend>Load it in the game once</legend>
+      <ol class="steps">
+        <li>In Sumotori Dreams: <b>Select Arena → Load Mod</b>, and pick this file:</li>
+      </ol>
+      <p><code id="file-path"></code> <button type="button" id="copy-path">Copy</button></p>
+      <ol class="steps" start="2">
+        <li>That's it. When the arena changes, Stream Core rewrites the file and the game reloads it by itself.</li>
+      </ol>
+      <p class="hint" id="last-write"></p>
+      <div class="btn-row"><button type="button" data-arena="rewrite">Write the file again</button></div>
+    </fieldset>
+    <fieldset class="cfg-card">
+      <legend>What's in the file now</legend>
+      <pre id="file-text" class="file-text"></pre>
+    </fieldset>
+  </section>
+
+  <!-- Settings tab: the plugin.json fields marked "page": true, grouped by "group" (sumotori.js
+       loadSettings). The arena file path stays on Settings → Plugins with Enabled. -->
+  <section class="sub" data-sub="settings" hidden>
+    <p class="hint">These apply straight away, no restart. Where the arena file goes is on Settings → Plugins, next to Enabled.</p>
+    <div id="settings" class="mc-grid"></div>
+    <div class="form-row" style="gap:8px;flex-wrap:wrap">
+      <button type="button" class="primary" id="save-settings">Save settings</button>
+      <span class="muted" id="settings-status"></span>
+    </div>
+  </section>
+</main>
+<script src="sumotori.js"></script>
+</body>
+</html>
