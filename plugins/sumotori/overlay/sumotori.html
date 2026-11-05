@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<!-- Sumotori Dreams scoreboard overlay, served by Stream Core at /overlay/sumotori.html.
+     Add it to OBS as a Browser source (transparent, about 420 x 300).
+     Data: GET /api/sumotori/state every 2 s (plugins/sumotori/routes.py), which only holds what chat
+     already sees. Shows: score + streak, open bets with a countdown and both pools, and the pieces
+     chat bought for the next arena. Parts with nothing to show are hidden.
+     URL options: ?hide=bets,queue,streak hides those parts; ?solid=1 puts a dark panel behind it. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sumotori scoreboard</title>
+  <style>
+    :root { --a: #ff6b6b; --b: #5ca8ff; --text: #f4f6fb; --muted: rgba(220, 226, 238, 0.75); }
+    html, body { margin: 0; background: transparent; color: var(--text);
+      font: 600 18px/1.25 "Segoe UI", system-ui, sans-serif; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+    body.solid #wrap { background: rgba(10, 12, 20, 0.78); border-radius: 12px; }
+    #wrap { display: inline-block; padding: 10px 14px; min-width: 300px; }
+    .score { font-size: 34px; display: flex; gap: 12px; align-items: baseline; }
+    .a { color: var(--a); } .b { color: var(--b); }
+    .muted { color: var(--muted); font-size: 15px; }
+    .bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 6px 0 2px;
+      background: rgba(255,255,255,0.15); }
+    .bar .a { background: var(--a); } .bar .b { background: var(--b); }
+    .bar div { transition: width 0.6s ease; }
+    ul { margin: 4px 0 0; padding-left: 1.1em; font-size: 15px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="wrap" hidden>
+    <div class="score"><span class="a" id="na">Red</span><span id="sa">0</span><span class="muted">–</span>
+      <span id="sb">0</span><span class="b" id="nb">Blue</span></div>
+    <div id="streak" class="muted" hidden></div>
+    <div id="bets" hidden>
+      <div id="bet-line"></div>
+      <div class="bar"><div class="a" id="bar-a" style="width:50%"></div><div class="b" id="bar-b" style="width:50%"></div></div>
+      <div class="muted" id="pools"></div>
+    </div>
+    <div id="queue" hidden>
+      <div class="muted" id="queue-title">Next arena</div>
+      <ul id="queue-list"></ul>
+    </div>
+  </div>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const q = new URLSearchParams(location.search);
+  const hide = new Set((q.get("hide") || "").split(",").map((s) => s.trim()).filter(Boolean));
+  if (q.get("solid") === "1") document.body.classList.add("solid");
+  const text = (el, t) => { el.textContent = t; };
+
+  function paint(d) {
+    $("wrap").hidden = false;
+    text($("na"), d.sides.a); text($("nb"), d.sides.b);
+    text($("sa"), d.score.a); text($("sb"), d.score.b);
+    const st = d.score.streak >= 2 && !hide.has("streak");
+    $("streak").hidden = !st;
+    if (st) text($("streak"), `${d.sides[d.score.streak_side]} has won ${d.score.streak} in a row`);
+
+    const r = d.round;
+    $("bets").hidden = !r || hide.has("bets");
+    if (r) {
+      const left = r.state === "open" && r.locks_at ? Math.max(0, Math.round(r.locks_at - d.now)) : null;
+      text($("bet-line"), r.state === "open"
+        ? `Bets open${left !== null ? ` · ${left}s` : ""} · !bet ${d.sides.a.toLowerCase()} / ${d.sides.b.toLowerCase()}`
+        : "Bets closed");
+      const total = r.pools.a + r.pools.b;
+      const pa = total ? Math.round((r.pools.a / total) * 100) : 50;
+      $("bar-a").style.width = pa + "%";
+      $("bar-b").style.width = 100 - pa + "%";
+      text($("pools"), `${r.pools.a.toLocaleString()} (${r.pools.a_n}) · ${r.pools.b.toLocaleString()} (${r.pools.b_n})`);
+    }
+
+    const list = d.apply === "now" ? d.arena : d.queue;
+    $("queue").hidden = !list.length || hide.has("queue");
+    text($("queue-title"), d.apply === "now" ? "In the arena" : "Next arena");
+    $("queue-list").replaceChildren(...list.slice(0, 6).map((p) => {
+      const li = document.createElement("li");
+      li.textContent = `${p.name} · ${p.who}`;
+      return li;
+    }));
+  }
+
+  async function tick() {
+    try {
+      const res = await fetch("/api/sumotori/state", { cache: "no-store" });
+      if (res.ok) paint(await res.json());
+      else $("wrap").hidden = true;          // plugin off: show nothing
+    } catch (_) {
+      $("wrap").hidden = true;
+    }
+  }
+  tick();
+  setInterval(tick, 2000);
+})();
+</script>
+</body>
+</html>

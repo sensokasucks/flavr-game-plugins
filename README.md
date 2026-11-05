@@ -2,7 +2,7 @@
 
 Optional games for **[FlaVR Stream Core](https://github.com/sensokasucks/flavr-leftovers)**:
 chat commands, overlays, market tickers and stream-power hooks for Minecraft, Factorio, Granvir,
-OpenTTD and Schedule I, plus **Gamer Stonks**, the points stock market. Stream Core runs fine without any of
+OpenTTD, Schedule I and Sumotori Dreams, plus **Gamer Stonks**, the points stock market. Stream Core runs fine without any of
 them; install only what you use.
 
 | Game | Core plugin | Game side | Ports |
@@ -12,6 +12,7 @@ them; install only what you use.
 | Granvir | [plugins/granvir](plugins/granvir/) (just a `plugin.json`) | [fridge-granvir-stats](fridge-granvir-stats/): BepInEx plugin, overlays, mock bridge (`START Granvir Mock.bat`) | 3855 |
 | OpenTTD | [plugins/openttd](plugins/openttd/) (Admin Port client, Chat Fund, FridgeChatFund game script) | the OpenTTD / JGRPP server itself | 3977 (Admin Port) |
 | Schedule I | [plugins/schedule1](plugins/schedule1/) (chatters become customers, `!customer`) | [fridge-schedule1](fridge-schedule1/): MelonLoader mod (needs S1API), mock mod (`START Schedule1 Mock.bat`) | 3857 |
+| Sumotori Dreams | [plugins/sumotori](plugins/sumotori/) (chat buys arena pieces, `!bet` on rounds, scoreboard overlay) | none: Core writes an arena file the game reloads (Select Arena → Load Mod) | none |
 
 | Feature | Core plugin | |
 |---------|-------------|-|

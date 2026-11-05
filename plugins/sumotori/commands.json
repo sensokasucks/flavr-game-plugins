@@ -1,0 +1,32 @@
+{
+  "arena": {
+    "aliases": ["build"],
+    "permission": "public",
+    "description": "Pay points to put a piece in the streamer's Sumotori Dreams arena (!arena alone lists pieces and prices)",
+    "args": ["piece"],
+    "group": "sumotori",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!arena", "!arena crate", "!arena wall"]
+  },
+  "bet": {
+    "aliases": ["sumobet"],
+    "permission": "public",
+    "description": "Bet points on who wins the Sumotori Dreams round while bets are open (!bet red 100, !bet blue all)",
+    "args": ["side", "points"],
+    "group": "sumotori",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!bet red 100", "!bet blue all"]
+  },
+  "score": {
+    "aliases": ["sumoscore"],
+    "permission": "public",
+    "description": "The Sumotori Dreams score and streak",
+    "args": [],
+    "group": "sumotori",
+    "handler": "game",
+    "cost": 0,
+    "examples": ["!score"]
+  }
+}

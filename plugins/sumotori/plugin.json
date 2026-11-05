@@ -1,0 +1,93 @@
+{
+  "id": "sumotori",
+  "name": "Sumotori Dreams",
+  "version": "0.1.0",
+  "core_api": 2,
+  "kind": "python",
+  "entry": "plugin:SumotoriDreams",
+  "description": "Chat builds your Sumotori Dreams arena with points (!arena crate, !arena wall) and bets on who wins each round (!bet red 100), with a scoreboard overlay. No game mod needed: Stream Core writes an arena file that the game reloads by itself (in the game: Select Arena > Load Mod).",
+  "links": [
+    {"name": "Sumotori Dreams Classic on Steam", "url": "https://store.steampowered.com/app/1604240/Sumotori_Dreams_Classic/"},
+    {"name": "Arena file format (developer's modding page)", "url": "https://www.gravitysensation.com/sumotori/modding.htm"}
+  ],
+  "config_defaults": {
+    "arena_file": "",
+    "base_file": "",
+    "apply": "next_round",
+    "pieces_enabled": true,
+    "prices": {"crate": 200, "bigcrate": 500, "crates": 600, "wall": 300, "breakwall": 300, "pillars": 400, "step": 150},
+    "max_pieces": 8,
+    "per_user_max": 2,
+    "piece_cooldown_sec": 30,
+    "refund_on_clear": true,
+    "arena_half": 9,
+    "floor_y": -7,
+    "texture": 0,
+    "fixed_flag": 1,
+    "loose_flag": 0,
+    "break_strength": 1,
+    "bets_enabled": true,
+    "side_a": "Red",
+    "side_b": "Blue",
+    "bet_window_sec": 60,
+    "bet_min": 10,
+    "bet_max": 0,
+    "payout": "pool",
+    "new_arena_after_result": true,
+    "auto_open": false,
+    "announce": true
+  },
+  "command_group": {
+    "description": "Sumotori Dreams arena pieces, bets and score (!arena, !bet, !score)"
+  },
+  "pages": [
+    {
+      "id": "main",
+      "title": "Sumotori Dreams",
+      "file": "pages/index.html",
+      "nav": "Games",
+      "keywords": "sumotori dreams sumo arena bets predictions scoreboard wrestling"
+    }
+  ],
+  "overlays": [
+    {"name": "Sumotori scoreboard", "file": "sumotori.html",
+     "notes": "Score, streak, open bets and the next arena's pieces. Transparent Browser source, about 420 x 300."}
+  ],
+  "settings": [
+    {"key": "arena_file", "label": "Arena file", "type": "text",
+     "placeholder": "empty = data\\plugins\\sumotori\\stream.smo",
+     "help": "Where Stream Core writes the arena. Empty = inside Core's data folder (the Sumotori Dreams page shows the full path). In the game: Select Arena > Load Mod > pick this file. A folder gets stream.smo inside it."},
+    {"key": "base_file", "page": true, "group": "Arena file", "label": "Start from this arena (.smo)", "type": "text",
+     "help": "Optional. An arena file that works in your game; chat's pieces are added after its lines. Empty = a plain square floor with you (player 1) and three AI wrestlers."},
+    {"key": "apply", "page": true, "group": "Arena file", "label": "When bought pieces show up", "type": "select", "options": ["next_round", "now"],
+     "help": "next_round = they wait for the next arena (Next arena button, or after a result). now = the file is rewritten straight away; if the game restarts the round when the file changes, use next_round."},
+    {"key": "pieces_enabled", "page": true, "group": "Chat builds the arena", "label": "Chat can buy arena pieces (!arena)", "type": "checkbox"},
+    {"key": "prices", "page": true, "group": "Chat builds the arena", "label": "Pieces and prices (points)", "type": "map",
+     "help": "One per line, piece: points. 0 = not for sale. Pieces: crate, bigcrate, crates (a shower of five), wall, breakwall, pillars, step."},
+    {"key": "max_pieces", "page": true, "group": "Chat builds the arena", "label": "Most pieces per arena", "type": "number", "min": 1, "max": 50, "step": 1},
+    {"key": "per_user_max", "page": true, "group": "Chat builds the arena", "label": "Most pieces per chatter per arena", "type": "number", "min": 0, "step": 1, "help": "0 = no limit"},
+    {"key": "piece_cooldown_sec", "page": true, "group": "Chat builds the arena", "label": "Wait between pieces, per chatter (s)", "type": "number", "min": 0, "step": 5},
+    {"key": "refund_on_clear", "page": true, "group": "Chat builds the arena", "label": "Give points back when you clear the queue", "type": "checkbox"},
+    {"key": "arena_half", "page": true, "group": "Fine-tuning the file", "label": "Pieces land this far from the middle", "type": "number", "min": 1.5, "step": 0.5,
+     "help": "Game units. Make it smaller if pieces land off the floor."},
+    {"key": "floor_y", "page": true, "group": "Fine-tuning the file", "label": "Height of the floor's top", "type": "number", "step": 0.5,
+     "help": "Game units, negative is down. -7 fits the built-in floor; change it to match your own base arena."},
+    {"key": "fixed_flag", "page": true, "group": "Fine-tuning the file", "label": "Last number of addbox for boxes that stay put", "type": "number", "step": 1,
+     "help": "Untested guess from the developer's example (1). If walls fall over or crates hang in the air, swap this and the next one."},
+    {"key": "loose_flag", "page": true, "group": "Fine-tuning the file", "label": "Last number of addbox for boxes that can move", "type": "number", "step": 1},
+    {"key": "texture", "page": true, "group": "Fine-tuning the file", "label": "Texture number for pieces", "type": "number", "step": 1},
+    {"key": "break_strength", "page": true, "group": "Fine-tuning the file", "label": "breakability() value for breakable walls", "type": "number", "step": 0.1},
+    {"key": "bets_enabled", "page": true, "group": "Bets", "label": "Chat can bet on rounds (!bet)", "type": "checkbox"},
+    {"key": "side_a", "page": true, "group": "Bets", "label": "First side's name", "type": "text", "help": "What chat types: !bet red 100"},
+    {"key": "side_b", "page": true, "group": "Bets", "label": "Second side's name", "type": "text"},
+    {"key": "bet_window_sec", "page": true, "group": "Bets", "label": "Bets close after (s)", "type": "number", "min": 0, "step": 5, "help": "0 = they stay open until you press Close bets"},
+    {"key": "bet_min", "page": true, "group": "Bets", "label": "Smallest bet (points)", "type": "number", "min": 0, "step": 10},
+    {"key": "bet_max", "page": true, "group": "Bets", "label": "Biggest bet per chatter per round (points)", "type": "number", "min": 0, "step": 100, "help": "0 = no limit"},
+    {"key": "payout", "page": true, "group": "Bets", "label": "How winners are paid", "type": "select", "options": ["pool", "double"],
+     "help": "pool = winners share everyone's points by stake (like Twitch predictions; everyone gets their points back if one side had no bets). double = each winning bet pays twice its stake."},
+    {"key": "new_arena_after_result", "page": true, "group": "Rounds", "label": "Start the next arena when you set a result", "type": "checkbox",
+     "help": "Pressing Red won / Blue won also loads the queued pieces (only with 'next_round')."},
+    {"key": "auto_open", "page": true, "group": "Rounds", "label": "Open bets for the next round straight away", "type": "checkbox"},
+    {"key": "announce", "page": true, "group": "Rounds", "label": "Say bets opening / closing, results and new arenas in chat", "type": "checkbox"}
+  ]
+}
