@@ -116,6 +116,7 @@ namespace FridgeSchedule1
             }
             if (!Allowed(ctx))
                 return;
+            Shared.CoreSeen();   // this player's Core is running (co-op guests: LobbySync's alert choice)
 
             if (req.HttpMethod == "GET" && path == "/customers")
             {

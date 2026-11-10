@@ -14,9 +14,12 @@
 // Callers: Core.OnUpdate calls Tick() every frame (names Core sent) and Refresh() every second;
 // Core.OnSceneWasInitialized calls OnWorldLoaded / OnWorldUnloaded. Main thread only.
 //
-// Names are local to this PC (other co-op players see the normal names) and never saved: while the
-// game saves (SaveManager.onSaveStart .. onSaveComplete) everyone has their own name back. Event and
-// field names must match plugins/schedule1/staff.py, dealers.py and mock/mock_server.py.
+// Co-op: the host's mod shares the names its Core sent (WantedStaff / WantedDealers) with every guest
+// through LobbySync.cs ("fs1.crew"); a guest's mod gets them with SetHostNames and puts them on the same
+// workers and dealers, so guests see "Dave (zackfan99)" too, even without Stream Core of their own.
+// Renames are never saved: while the game saves (SaveManager.onSaveStart .. onSaveComplete) everyone has
+// their own name back. Event and field names must match plugins/schedule1/staff.py, dealers.py and
+// mock/mock_server.py.
 
 using System;
 using System.Collections.Generic;
@@ -78,6 +81,10 @@ namespace FridgeSchedule1
         // What Core wants (kept for the whole run: re-applied after loading another save) and what is on now.
         private Dictionary<string, WantedName> _wantStaff = new Dictionary<string, WantedName>();
         private Dictionary<string, WantedName> _wantDealers = new Dictionary<string, WantedName>();
+        // The host's names on a co-op guest (LobbySync.ClientTick -> SetHostNames). Kept apart from this
+        // player's own Core's names so leaving the lobby goes straight back to those.
+        private Dictionary<string, WantedName> _hostStaff = new Dictionary<string, WantedName>();
+        private Dictionary<string, WantedName> _hostDealers = new Dictionary<string, WantedName>();
         private readonly Dictionary<string, WantedName> _applied = new Dictionary<string, WantedName>();
         // Every renamable NPC seen by the last Refresh, for the save-time name swap.
         private readonly Dictionary<string, S1NPC> _byId = new Dictionary<string, S1NPC>();
@@ -125,6 +132,21 @@ namespace FridgeSchedule1
             _dealsWaiting.Clear();
         }
 
+        /// <summary>Host side of co-op: the worker / dealer names this player's Core asked for, which
+        /// LobbySync.HostTick shares with the guests. Main thread.</summary>
+        public Dictionary<string, WantedName> WantedStaff => _wantStaff;
+        public Dictionary<string, WantedName> WantedDealers => _wantDealers;
+
+        /// <summary>Co-op guest: the host's worker / dealer names (LobbySync.ClientTick, main thread, only
+        /// when they changed). Used instead of this player's own while Shared.Role is "client".</summary>
+        public void SetHostNames(Dictionary<string, WantedName> staff, Dictionary<string, WantedName> dealers)
+        {
+            _hostStaff = staff ?? new Dictionary<string, WantedName>();
+            _hostDealers = dealers ?? new Dictionary<string, WantedName>();
+            if (_loaded)
+                Refresh();
+        }
+
         /// <summary>Every frame: names Core sent (POST /crewnames), applied at once.</summary>
         public void Tick()
         {
@@ -146,6 +168,10 @@ namespace FridgeSchedule1
             if (!_loaded)
                 return;
             HookSaves();
+            // A co-op guest shows the host's names (LobbySync); the host or a solo player its own Core's.
+            bool guest = Shared.Role == "client";
+            var wantStaff = guest ? _hostStaff : _wantStaff;
+            var wantDealers = guest ? _hostDealers : _wantDealers;
             var staff = new List<CrewMember>();
             var dealers = new List<CrewMember>();
             var suppliers = new List<CrewMember>();
@@ -158,7 +184,7 @@ namespace FridgeSchedule1
                     if (e == null || e.Fired || string.IsNullOrEmpty(e.ID))
                         continue;
                     var own = Own(e);
-                    KeepName(e, _wantStaff);
+                    KeepName(e, wantStaff);
                     HookJobs(e);
                     staff.Add(new CrewMember
                     {
@@ -181,7 +207,7 @@ namespace FridgeSchedule1
                     if (d == null || !d.IsRecruited || string.IsNullOrEmpty(d.ID))
                         continue;
                     var own = Own(d);
-                    KeepName(d, _wantDealers);
+                    KeepName(d, wantDealers);
                     WatchDealer(d);
                     dealers.Add(new CrewMember
                     {

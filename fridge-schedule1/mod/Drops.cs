@@ -18,6 +18,10 @@
 // The cash and goods are real game items, so they stay in the drop (and in the save) like anything
 // the player puts there. The note, the marker and the chatter's name are never saved: notes are a
 // pop-up (Shared.AddNotice), markers are S1API map markers that go with the scene.
+//
+// Co-op: drops are made in the host's world only, but the guests see them too. LobbySync.cs shares the
+// host's open markers (OpenMarkers, "fs1.crew") and its pop-ups ("fs1.pop"), and a guest's mod draws the
+// same markers on its own map and shows the same pop-ups.
 
 using System;
 using System.Collections.Generic;
@@ -39,9 +43,9 @@ namespace FridgeSchedule1
         private const float MarkerMinutes = 60f;     // real minutes a marker stays when nobody empties the drop
 
         private readonly MelonLogger.Instance _log;
-        // Drops waiting to be emptied: Core's id -> (the drop, marker id, real time it gives up)
-        private readonly Dictionary<long, (S1DeadDrop drop, string marker, float until)> _open =
-            new Dictionary<long, (S1DeadDrop, string, float)>();
+        // Drops waiting to be emptied: Core's id -> (the drop, marker id, real time it gives up, marker label)
+        private readonly Dictionary<long, (S1DeadDrop drop, string marker, float until, string label)> _open =
+            new Dictionary<long, (S1DeadDrop, string, float, string)>();
 
         public Drops(MelonLogger.Instance log)
         {
@@ -84,7 +88,7 @@ namespace FridgeSchedule1
             var now = Time.realtimeSinceStartup;
             foreach (var id in new List<long>(_open.Keys))
             {
-                var (drop, marker, until) = _open[id];
+                var (drop, marker, until, _) = _open[id];
                 bool taken;
                 try
                 {
@@ -293,8 +297,26 @@ namespace FridgeSchedule1
             {
                 _log.Warning("drop marker failed: " + ex.Message);
             }
-            _open[id] = (drop, marker, Time.realtimeSinceStartup + MarkerMinutes * 60f);
+            _open[id] = (drop, marker, Time.realtimeSinceStartup + MarkerMinutes * 60f, label);
             Shared.AddFeed($"{label} at {DropName(drop)}");
+        }
+
+        /// <summary>The host's open drops for co-op guests (LobbySync.HostTick, main thread, every second):
+        /// Core's id, the marker's label ("Cash drop from zackfan99") and where the drop is. A drop
+        /// leaves this list once it is emptied or its marker times out (Watch), and the guests' markers go too.</summary>
+        public List<(long id, string label, Vector3 where)> OpenMarkers()
+        {
+            var list = new List<(long, string, Vector3)>();
+            foreach (var kv in _open)
+            {
+                try
+                {
+                    if (kv.Value.drop != null)
+                        list.Add((kv.Key, kv.Value.label, kv.Value.drop.transform.position));
+                }
+                catch { /* the drop object is gone; Watch drops it next second */ }
+            }
+            return list;
         }
 
         private static void RemoveMarker(string marker)

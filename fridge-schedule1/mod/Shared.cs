@@ -144,7 +144,8 @@ namespace FridgeSchedule1
         private static int _feedVersion;
         private static readonly Queue<Notice> _notices = new Queue<Notice>();
         // Alerts tab (ChatApp). Only touched from the main thread (Core.ShowNotice, ChatApp), but kept
-        // here with the rest under the same lock. Each player's own: never shared through LobbySync.
+        // here with the rest under the same lock. The host's pop-ups also go to co-op guests (LobbySync
+        // "fs1.pop"), whose Core.ShowNotice adds them here like their own.
         private const int MaxAlerts = 50;
         private static readonly List<AlertEntry> _alerts = new List<AlertEntry>();
         private static int _alertSeq;
@@ -155,6 +156,11 @@ namespace FridgeSchedule1
         private const int MaxRequests = 20;    // Core requests waiting for the main thread
         private static string _role = "host";
         private static readonly Queue<CoreRequest> _requests = new Queue<CoreRequest>();
+        // Last time (UTC) this player's own Stream Core talked to the mod (BridgeServer.Handle, any
+        // allowed request; Core polls every couple of seconds). A co-op guest without Core of its own
+        // shows the host's stream alerts instead (LobbySync.ClientTick, OwnCoreActive).
+        private const double OwnCoreQuietSec = 30;
+        private static DateTime _coreSeen = DateTime.MinValue;
         // Latest POST /mixvote not yet seen by MixNamer (only the newest matters).
         private static MixState _mixState;
 
@@ -174,6 +180,21 @@ namespace FridgeSchedule1
                 _mixState = null;
                 return s;
             }
+        }
+
+        /// <summary>HTTP thread (BridgeServer.Handle): this player's Stream Core just made a request.</summary>
+        public static void CoreSeen()
+        {
+            lock (Lock)
+                _coreSeen = DateTime.UtcNow;
+        }
+
+        /// <summary>True while this player's own Stream Core has talked to the mod in the last
+        /// OwnCoreQuietSec seconds. Read by LobbySync on a co-op guest: with no Core of its own the
+        /// guest shows the host's stream alerts; with one it keeps only its own.</summary>
+        public static bool OwnCoreActive
+        {
+            get { lock (Lock) return (DateTime.UtcNow - _coreSeen).TotalSeconds < OwnCoreQuietSec; }
         }
 
         /// <summary>"host" or "client"; set by LobbySync every second, read by BridgeServer.</summary>

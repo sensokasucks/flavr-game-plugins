@@ -14,7 +14,7 @@
 //   Mugger.cs          !mug: cartel goons sent after a player (host only)
 //   CustomerStatus.cs  when a customer will turn up (status words), the order nudge, the Find marker
 //   ImageCache.cs      alert pictures for the Alerts tab, downloaded once
-//   LobbySync.cs       co-op: the host shares names / lists, clients forward joins and mugs
+//   LobbySync.cs       co-op: the host shares names / lists / drop markers / pop-ups, clients forward joins and mugs
 //   MixNamer.cs        "Let chat name it" button on the new mix naming screen (chat votes the name)
 //   Crew.cs            workers named after chatters, dealer sponsors, the suppliers list (+ RobPatch)
 //   NpcNames.cs        reads / sets a worker's or dealer's shown name
@@ -29,7 +29,7 @@
 using System;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.8.3", "sensokasucks",
+[assembly: MelonInfo(typeof(FridgeSchedule1.Core), "FridgeSchedule1", "0.9.0", "sensokasucks",
     "https://github.com/sensokasucks/flavr-game-plugins/tree/main/fridge-schedule1")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
@@ -77,10 +77,10 @@ namespace FridgeSchedule1
 
             _watcher = new CustomerWatcher(LoggerInstance);
             _mugger = new Mugger(LoggerInstance);
-            _lobby = new LobbySync(LoggerInstance, _watcher, _mugger);
             _mixNamer = new MixNamer(LoggerInstance);
             _crew = new Crew(LoggerInstance);
             _drops = new Drops(LoggerInstance);
+            _lobby = new LobbySync(LoggerInstance, _watcher, _mugger, _crew, _drops);   // after the crew and drops it shares
             _mixPicker = new MixPicker(LoggerInstance);
             try
             {
@@ -109,6 +109,7 @@ namespace FridgeSchedule1
                 _crew.OnWorldUnloaded();
             }
             _drops.Clear();                      // the old scene's drops and markers are gone
+            _lobby.OnSceneChanged();             // and the host's drop markers a co-op guest drew
             _mugger.Clear();
             _nudges.Clear();
             CustomerStatus.StopFinding(null);    // S1API drops map markers with the scene anyway
@@ -221,6 +222,7 @@ namespace FridgeSchedule1
         // there is no NotificationsManager; the alert then only goes to the feed.
         private void ShowNotice(Notice n)
         {
+            _lobby.OnNotice(n);      // a host passes its pop-ups on to co-op guests (LobbySync "fs1.pop")
             var title = string.IsNullOrEmpty(n.title) ? "Stream" : n.title;
             // Stream alerts stay in the Chat app's Alerts tab (with Stream Core's look) so the streamer
             // can read them after the pop-up has gone; other notes go to the Feed as before.

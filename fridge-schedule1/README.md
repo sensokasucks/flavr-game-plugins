@@ -22,7 +22,8 @@ What happens:
 - Chatters on the picture hide list or red-flagged in Core never get a name, and lose theirs if they
   get flagged later.
 
-Renaming is only on your PC: co-op friends see the normal names, and nothing is written into your save.
+Nothing is written into your save. In co-op the host's mod passes the names on to every friend's mod, so they see
+the same names (see **Co-op** below).
 
 ## Regulars: ten extra customers
 
@@ -113,7 +114,13 @@ other players through Steam lobby data, so everyone sees the same names.
   (through the friend's mod). Hide lists and red flags are checked on both sides.
 - Chat lines about a chatter go to the chat they came from: the friend's chat hears about the friend's chatters.
 - On a friend's game the Chat app shows the host's lists without Remove / Swap (only the host edits them);
-  the Feed and stream alert pop-ups stay each player's own.
+  the Feed stays each player's own.
+- Workers and dealers named after the host's chatters show with those names for friends too, and the host's
+  cash drops and supplier deliveries show on every friend's map with the same pop-up note.
+- The host's stream alerts (pop-up + Alerts tab) also show for a friend who has the mod but **no Stream Core
+  running**. A friend whose own Core is running keeps only their own alerts. Pictures that Core serves from the
+  host's own PC can't reach a friend, so those cards show without the picture.
+- A friend needs only the mod for all of this, not Stream Core.
 - `!mug` from a friend's chat hits the friend's player: the host's mod sends the goons. Points and cooldown
   stay in the friend's Core, which refunds if the host's game refuses.
 - Playing alone counts as hosting.
@@ -174,7 +181,8 @@ can read it after the pop-up is gone. Unread ones have a dot and the tab says "A
 `font-weight` and `--alert-muted` (the viewer's message); the "card" skin uses `--alert-card-bg`. Fonts,
 sizes, gradients, shadows and animations can't be shown in the game and are left out. The kind's picture from
 Core's alert page (PNG / JPG; GIFs and videos aren't shown) or the sticker / gift image sits on the card.
-Sounds are not played (the game's pop-up already makes its own). Alerts stay each player's own in co-op.
+Sounds are not played (the game's pop-up already makes its own). In co-op a friend without Stream Core running
+also gets the host's alerts (see **Co-op**).
 
 **Stream alerts on the phone**: tick **Show stream alerts on the in-game phone** on Core's Schedule I card.
 Follows, subs, raids, tips and the rest pop up like a phone notification and go into the feed. If the
@@ -257,7 +265,7 @@ and checks `X-Fridge-Token` when a Token is set.
 
 `GET /customers` also has `role` (`host`, or `client` when this game is a guest in a friend's lobby) and
 `board` (the Chat app's lists; the host's on a client). On a client `POST /names`, `/board`, `/crewnames`, `/drop` and `/supplier` answer 409.
-Co-op data between the mods travels as Steam lobby data (`fs1.names`, `fs1.board`, `fs1.res` from the host,
+Co-op data between the mods travels as Steam lobby data (`fs1.names`, `fs1.board`, `fs1.res`, `fs1.crew`, `fs1.pop` from the host,
 `fs1.req` member data from each guest), see `mod/LobbySync.cs`.
 
 `boot` changes every time the game starts (event numbers start again at 1).
