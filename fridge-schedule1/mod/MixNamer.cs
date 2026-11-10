@@ -60,10 +60,13 @@ namespace FridgeSchedule1
         private TMPText _buttonLabel;
         private TMPText _status;
         private string _shownLabel, _shownStatus;   // last texts set, so the UI is only touched on change
+        // Backup click check (ButtonWatch.cs): runs OnButton when co-op swallows the button's own click.
+        private readonly ButtonWatch _watch;
 
         public MixNamer(MelonLogger.Instance log)
         {
             _log = log;
+            _watch = new ButtonWatch(log, ButtonText, OnButton);
         }
 
         /// <summary>Every frame from Core.OnUpdate: notice the screen opening / closing, apply Core's
@@ -91,6 +94,7 @@ namespace FridgeSchedule1
                 _wasOpen = open;
                 if (!open)
                     return;
+                _watch.Tick(_button);              // may call OnButton when the real click never came
                 if (state != null)
                     Apply(screen, state);
                 if (_mode == "asking" && Time.realtimeSinceStartup - _askedAt > AnswerTimeoutSec)
@@ -127,11 +131,28 @@ namespace FridgeSchedule1
             _mode = "idle";
         }
 
+        // Our button's click, or ButtonWatch's stand-in for it. Errors are logged here because one thrown
+        // inside a Unity button click can vanish without a trace (the button then just "does nothing").
         private void OnButton()
+        {
+            try
+            {
+                Press();
+            }
+            catch (Exception ex)
+            {
+                _log.Warning("'Let chat name it' press failed: " + ex);
+                _mode = "idle";
+                _note = "That didn't work (see the MelonLoader log).";
+            }
+        }
+
+        private void Press()
         {
             var screen = Il2CppScheduleOne.DevUtilities.Singleton<S1Screen>.Instance;
             if (screen == null || !screen.IsOpen)
                 return;
+            _log.Msg($"'Let chat name it' pressed ({(_mode == "idle" ? "start" : "stop")})");
             if (_mode != "idle")
             {
                 // second press: take the naming back
@@ -303,7 +324,7 @@ namespace FridgeSchedule1
             var btn = _button.GetComponent<Button>();
             btn.onClick = new Button.ButtonClickedEvent();   // drop the copied Confirm click
             btn.interactable = true;
-            ButtonUtils.AddListener(btn, () => OnButton());
+            ButtonUtils.AddListener(btn, () => { _watch.Clicked(); OnButton(); });
             var rt = _button.GetComponent<RectTransform>();
             rt.anchoredPosition = crt.anchoredPosition + new Vector2(0f, -(h + 14f));
             _buttonLabel = _button.GetComponentInChildren<TMPText>(true);
@@ -321,7 +342,7 @@ namespace FridgeSchedule1
 
             _builtFor = screen;
             _shownLabel = _shownStatus = null;
-            _log.Msg("'Let chat name it' button added to the new mix screen");
+            _log.Msg("'Let chat name it' button added to the new mix screen (" + ButtonWatch.Describe(_button) + ")");
         }
 
         // All effect lines on the screen as one newline-joined rich text, for Lines() below. The game
