@@ -15,7 +15,8 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
 - [ ] Renames never reach the save. Customers' own names come back on leave.
 - [ ] Co-op: the host's mod decides; it shares names / lists through Steam lobby data (`mod/LobbySync.cs`, each value
       under 8 KB). A guest's Core never sends `/names` or `/board` (the mod answers 409) and forwards joins with
-      platform + user id; hide lists / red flags are checked on both sides. Chat lines go to the chat a chatter came
+      platform + user id; hide lists / red flags are checked on both sides. Worker / dealer names and open drop
+      markers go to guests as `fs1.crew`; a guest's mod applies them without needing its own Core. Chat lines go to the chat a chatter came
       from (`origin`). Only the host gets Remove / Swap in the Chat app.
 - [ ] `!mug`: `mug_enabled` default **false**. Price is the `mug_cost` setting (commands.json `cost` stays 0: Core's
       cost field only gates). Refund + chat line when the game refuses or doesn't answer within 30 s. Goons run on
@@ -29,7 +30,8 @@ Home: `fridge-schedule1/` (MelonLoader `mod/`, `mock/mock_server.py`). Core side
       a save that met them needs the DLL, and co-op players need it too. `regulars_only` (default **false**) names
       only customers with `"regular": true` (mod: id prefix `fridge_regular_`, mock likewise).
 - [ ] Alerts tab: the look comes from Core's alert CSS via `plugins/schedule1/alert_style.py` (the mod never parses
-      CSS); `/notify` fields match in bridge.py, BridgeServer.cs and the mock. Alerts are never shared in co-op.
+      CSS); `/notify` fields match in bridge.py, BridgeServer.cs and the mock. In co-op the host shares its pop-ups
+      (`fs1.pop`); a guest shows drop / supplier notes always and stream alerts only while its own Core is quiet.
       Viewer text is escaped before it goes into rich text (no `<b>` from chat).
 - [ ] Chat app layout uses anchors only (fractions of the app area, safe margin for the bezel), no fixed pixel
       widths; rows stretch to the list width.
