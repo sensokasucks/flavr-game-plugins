@@ -33,6 +33,8 @@
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(Il2CppDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <!-- Unity UI (Image, Text, Button, layout groups) for the phone app, ChatApp.cs -->
     <Reference Include="UnityEngine.UI"><HintPath>$(Il2CppDir)\UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
+    <!-- Mouse state for ButtonWatch.cs (the game reads input through Unity's Input System package) -->
+    <Reference Include="Unity.InputSystem"><HintPath>$(Il2CppDir)\Unity.InputSystem.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.UIModule"><HintPath>$(Il2CppDir)\UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
     <!-- ImageConversion.LoadImage for alert pictures, ImageCache.cs -->
     <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(Il2CppDir)\UnityEngine.ImageConversionModule.dll</HintPath><Private>false</Private></Reference>
